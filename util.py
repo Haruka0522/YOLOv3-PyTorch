@@ -20,14 +20,10 @@ def predict_transform(
     num_anchors = len(anchors)
 
     prediction = prediction.view(
-        batch_size,
-        bbox_attrs * num_anchors,
-        grid_size ** 2)
+        batch_size, bbox_attrs * num_anchors, grid_size * grid_size)
     prediction = prediction.transpose(1, 2).contiguous()
     prediction = prediction.view(
-        batch_size,
-        grid_size ** 2 * num_anchors,
-        bbox_attrs)
+        batch_size, grid_size ** 2 * num_anchors, bbox_attrs)
 
     anchors = [(a[0]/stride, a[1]/stride) for a in anchors]
 
@@ -44,20 +40,22 @@ def predict_transform(
     if CUDA:
         x_offset = x_offset.cuda()
         y_offset = y_offset.cuda()
-    x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1, num_anchors).view(-1, 2).unsqueeze(0)
-    prediction[:,:,:2] += x_y_offset
+    x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(
+        1, num_anchors).view(-1, 2).unsqueeze(0)
+    prediction[:, :, :2] += x_y_offset
 
-    #bounding boxの寸法にanchorを適用
+    # bounding boxの寸法にanchorを適用
     anchors = torch.FloatTensor(anchors)
     if CUDA:
         anchors = anchors.cuda()
-    anchors = anchors.repeat(grid_size**2,1).unsqueeze(0)
-    prediction[:,:,2:4] = torch.exp(prediction[:,:,2:4]) * anchors
+    anchors = anchors.repeat(grid_size**2, 1).unsqueeze(0)
+    prediction[:, :, 2:4] = torch.exp(prediction[:, :, 2:4]) * anchors
 
-    #class scoreにsigmoid activationを適用
-    prediction[:,:,5:5+num_classes] = torch.sigmoid((prediction[:,:,5:5+num_classes]))
+    # class scoreにsigmoid activationを適用
+    prediction[:, :, 5:5 +
+               num_classes] = torch.sigmoid((prediction[:, :, 5:5+num_classes]))
 
-    #検出マップのサイズを入力画像のサイズに変更するために、ストライドをかける
-    prediction[:,:,:4] *= stride
+    # 検出マップのサイズを入力画像のサイズに変更するために、ストライドをかける
+    prediction[:, :, :4] *= stride
 
     return prediction
