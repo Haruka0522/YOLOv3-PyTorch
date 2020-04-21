@@ -139,6 +139,12 @@ class DetectionLayer(nn.Module):
         super(DetectionLayer,self).__init__()
         self.anchors = anchors
 
+class Darknet(nn.Module):
+    def __init__(self,cfg_file):
+        super(Darknet,self).__init__()
+        self.blocks = parse_cfg(cfg_file)
+        self.net_info,self.module_list = create_modules(self.blocks)
+
 """このコードが正常にかけているかのテスト
 blocks = parse_cfg("cfg/yolov3.cfg")
 print(create_modules(blocks))
