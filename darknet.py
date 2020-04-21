@@ -5,8 +5,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
+import cv2
 
 from util import *
+
+
+def get_test_input():
+    img = cv2.imread("dog-cycle-car.png")
+    img = cv2.resize(img, (608, 608))
+    img_ = img[:, :, ::-1].transpose((2, 0, 1))
+    img_ = img_[np.newaxis, :, :, :] / 255.0
+    img_ = torch.from_numpy(img_).float()
+    img_ = Variable(img_)
+
+    return img_
 
 
 def parse_cfg(cfgfile):
@@ -173,7 +185,7 @@ class Darknet(nn.Module):
 
                 if layers[0] > 0:
                     layers[0] = layers[0] - i
-                if len(leyers) == 1:
+                if len(layers) == 1:
                     x = outputs[i + (layers[0])]
                 else:
                     if layers[1] > 0:
@@ -185,7 +197,7 @@ class Darknet(nn.Module):
 
             # shortcut層の場合
             elif module_type == "shortcut":
-                from module_type == "shortcut":
+                if module_type == "shortcut":
                     from_ = int(module["from"])
                     x = outputs[i-1] + outputs[i+from_]
 
@@ -200,7 +212,7 @@ class Darknet(nn.Module):
                     detections = x
                     write = 1
                 else:
-                    detections = torch.cat((detections,x),1)
+                    detections = torch.cat((detections, x), 1)
 
             outputs[i] = x
 
@@ -208,6 +220,10 @@ class Darknet(nn.Module):
 
 
 """このコードが正常にかけているかのテスト
-blocks = parse_cfg("cfg/yolov3.cfg")
-print(create_modules(blocks))
+#blocks = parse_cfg("cfg/yolov3.cfg")
+#print(create_modules(blocks))
 """
+model = Darknet("cfg/yolov3.cfg")
+inp = get_test_input()
+pred = model(inp, torch.cuda.is_available())
+print(pred)
