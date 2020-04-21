@@ -8,3 +8,4 @@ terminaltables
 pillow
 tqdm
 opencv-python
+autopep8
