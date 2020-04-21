@@ -145,6 +145,44 @@ class Darknet(nn.Module):
         self.blocks = parse_cfg(cfg_file)
         self.net_info,self.module_list = create_modules(self.blocks)
 
+    def forward(self,x,CUDA):
+        modules = self.blocks[1:]
+        outputs = {}   #route層のキャッシュ用
+
+        write = 0
+        for i,module in enumerate(modules):
+            module_type = module["type"]
+
+            #畳み込み層またはupsample層の場合
+            if module_type == "convolutional" or module_type == "upsample":
+                x = self.module_list[i](x)
+
+            #route層の場合
+            elif module_type == "route":
+                layers = module["layers"]
+                layers = [int(a) for a in layers]
+
+                if layers[0] > 0:
+                    layers[0] = layers[0] - i
+                if len(leyers) == 1:
+                    x = outputs[i + (layers[0])]
+                else:
+                    if layers[1] > 0:
+                        layers[1] = layers[1] - i
+                    map1 = outputs[i+layers[0]]
+                    map2 = outputs[i+layers[1]]
+
+                    x = torch.cat((map1,map2),1)
+
+            #shortcut層の場合
+            elif module_type == "shortcut":
+                from module_type == "shortcut":
+                    from_ = int(module["from"])
+                    x = outputs[i-1] + outputs[i+from_]
+
+
+
+
 """このコードが正常にかけているかのテスト
 blocks = parse_cfg("cfg/yolov3.cfg")
 print(create_modules(blocks))
