@@ -32,9 +32,9 @@ def predict_transform(
     anchors = [(a[0]/stride, a[1]/stride) for a in anchors]
 
     # sigmoid関数を通してobjectness scoreを算出する
-    predict[:, :, 0] = torch.sigmoid(prediction[:, :, 0])
-    predict[:, :, 1] = torch.sigmoid(prediction[:, :, 1])
-    predict[:, :, 4] = torch.sigmoid(prediction[:, :, 4])
+    prediction[:, :, 0] = torch.sigmoid(prediction[:, :, 0])
+    prediction[:, :, 1] = torch.sigmoid(prediction[:, :, 1])
+    prediction[:, :, 4] = torch.sigmoid(prediction[:, :, 4])
 
     # グリッドオフセットを中心座標予測に追加
     grid = np.arange(grid_size)
@@ -44,8 +44,8 @@ def predict_transform(
     if CUDA:
         x_offset = x_offset.cuda()
         y_offset = y_offset.cuda()
-    x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1, num_anchor).view(-1, 2).unsqueeze(0)
-    prediction[:,:,2] += x_y_offset
+    x_y_offset = torch.cat((x_offset, y_offset), 1).repeat(1, num_anchors).view(-1, 2).unsqueeze(0)
+    prediction[:,:,:2] += x_y_offset
 
     #bounding boxの寸法にanchorを適用
     anchors = torch.FloatTensor(anchors)
@@ -58,6 +58,6 @@ def predict_transform(
     prediction[:,:,5:5+num_classes] = torch.sigmoid((prediction[:,:,5:5+num_classes]))
 
     #検出マップのサイズを入力画像のサイズに変更するために、ストライドをかける
-    prediction[:,:,:,4] *= stride
+    prediction[:,:,:4] *= stride
 
     return prediction
