@@ -18,7 +18,7 @@ def bbox_iou(box1, box2):
     inter_rect_x1 = torch.max(b1_x1, b2_x1)
     inter_rect_y1 = torch.max(b1_y1, b2_y1)
     inter_rect_x2 = torch.max(b1_x2, b2_x2)
-    inter_rect_x2 = torch.max(b1_y2, b2_y2)
+    inter_rect_y2 = torch.max(b1_y2, b2_y2)
 
     inter_area = torch.clamp(inter_rect_x2 - inter_rect_x1 + 1, min=0) * \
         torch.clamp(inter_rect_y2 - inter_rect_y1 + 1, min=0)
@@ -144,8 +144,8 @@ def write_results(prediction, confidence, num_classes, nms_conf=0.4):
             image_pred_class = image_pred_[class_mask_idx].view(-1, 7)
 
             # objectnessでsort
-            conf_sort_idx = torch.sort(
-                image_pred_class[:4], descending=True)[1]
+            conf_sort_index = torch.sort(
+                image_pred_class[:, 4], descending=True)[1]
             image_pred_class = image_pred_class[conf_sort_index]
             indx = image_pred_class.size(0)  # 検出されたnumber
 
@@ -190,21 +190,24 @@ def letterbox_image(img, inp_dim):
     """画像をリサイズします"""
     img_h = img.shape[0]
     img_w = img.shape[1]
+    w, h = inp_dim
     new_h = int(img_h * min(w/img_w, h/img_h))
     new_w = int(img_w * min(w/img_w, h/img_h))
-    resized_image = cv2.resize(img, (new_w, new_h), interpolation = cv2.INTER_CUBIC)
-    canvas=np.full((inp_dim[1], inp_dim[0], 3), 128)
-    canvas[(h-new_h)//2:(h-new_h)//2 + new_h, (w-new_w)//
-            2: (w-new_w)//2 + new_w, :] = resized_image
+    resized_image = cv2.resize(
+        img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+    canvas = np.full((inp_dim[1], inp_dim[0], 3), 128)
+    canvas[(h-new_h)//2:(h-new_h)//2 + new_h, (w-new_w) //
+           2: (w-new_w)//2 + new_w, :] = resized_image
 
     return canvas
+
 
 def prep_image(img, inp_dim):
     """
     ニューラルネットワークで扱える形式に画像を変換します
     """
     img = (letterbox_image(img, (inp_dim, inp_dim)))
-    img = img[:,:,::-1].transpose((2,0,1)).copy()
+    img = img[:, :, ::-1].transpose((2, 0, 1)).copy()
     img = torch.from_numpy(img).float().div(255.0).unsqueeze(0)
 
     return img
