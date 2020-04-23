@@ -9,6 +9,8 @@ import cv2
 
 from util import *
 
+from parse_config import *
+
 
 def get_test_input():
     img = cv2.imread("dog-cycle-car.png")
@@ -21,37 +23,9 @@ def get_test_input():
     return img_
 
 
-def parse_cfg(cfgfile):
-    """
-    configファイルを読み取ってくる関数
-    cfgファイルのパスを渡すと解析して全てのブロックをdictとして保存する
-    """
-    cfg_file = open(cfgfile, "r")
-    lines = cfg_file.read().split("\n")
-    lines = [x for x in lines if len(x) > 0]  # 空の行を無視する
-    lines = [x for x in lines if x[0] != "#"]  # コメントアウトを無視する
-    lines = [x.rstrip().lstrip() for x in lines]
-
-    block = {}
-    blocks = []
-
-    for line in lines:
-        if line[0] == "[":
-            if len(block) != 0:
-                blocks.append(block)
-                block = {}
-            block["type"] = line[1:-1].rstrip()
-        else:
-            key, value = line.split("=")
-            block[key.rstrip()] = value.lstrip()
-    blocks.append(block)
-
-    return blocks
-
-
 def create_modules(blocks):
     """
-    parse_cfg()関数で読み込んだ情報をPyTorchのレイヤーを重ねてモジュール化する
+    parse_model_config()関数で読み込んだ情報をPyTorchのレイヤーを重ねてモジュール化する
     """
     net_info = blocks[0]
     module_list = nn.ModuleList()
@@ -163,7 +137,7 @@ class DetectionLayer(nn.Module):
 class Darknet(nn.Module):
     def __init__(self, cfg_file):
         super(Darknet, self).__init__()
-        self.blocks = parse_cfg(cfg_file)
+        self.blocks = parse_model_config(cfg_file)
         self.net_info, self.module_list = create_modules(self.blocks)
 
     def forward(self, x, CUDA):
@@ -289,7 +263,7 @@ class Darknet(nn.Module):
 
 """このコードが正常にかけているかのテスト"""
 """
-#blocks = parse_cfg("cfg/yolov3.cfg")
+#blocks = parse_model_config("cfg/yolov3.cfg")
 #print(create_modules(blocks))
 """
 """
