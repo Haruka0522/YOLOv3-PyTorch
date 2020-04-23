@@ -210,3 +210,11 @@ def prep_image(img, inp_dim):
     img = torch.from_numpy(img).float().div(255.0).unsqueeze(0)
 
     return img
+
+def load_classes(path):
+    """
+    クラスのconfigファイルを読み込む
+    """
+    fp = open(path,"r")
+    names = fp.read().split("\n")[:-1]
+    return names
