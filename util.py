@@ -181,12 +181,6 @@ def write_results(prediction, confidence, num_classes, nms_conf=0.4):
         return 0
 
 
-def load_classes(namesfile):
-    fp = open(namesfile, "r")
-    names = fp.read().split("\n")[:-1]
-    return names
-
-
 def letterbox_image(img, inp_dim):
     """画像をリサイズします"""
     img_h = img.shape[0]
@@ -218,7 +212,7 @@ def load_classes(path):
     """
     クラスのconfigファイルを読み込む
     """
-    fp = open(path,"r")
+    fp = open(path, "r")
     names = fp.read().split("\n")[:-1]
     return names
 
