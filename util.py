@@ -43,10 +43,12 @@ def unique(tensor):
 
 
 def predict_transform(
-        prediction, inp_dim, anchors, num_classes, CUDA=True):
+        prediction, inp_dim, anchors, num_classes, CUDA=None):
     """
     検出マップを受け取って２次元テンソルに変換する
     """
+    if CUDA == None:
+        CUDA = torch.cuda.is_available()
     batch_size = prediction.size(0)
     stride = inp_dim // prediction.size(2)
     grid_size = inp_dim // stride
@@ -211,6 +213,7 @@ def prep_image(img, inp_dim):
 
     return img
 
+
 def load_classes(path):
     """
     クラスのconfigファイルを読み込む
@@ -218,6 +221,7 @@ def load_classes(path):
     fp = open(path,"r")
     names = fp.read().split("\n")[:-1]
     return names
+
 
 def weights_init_normal(m):
     classname = m.__class__.__name__
