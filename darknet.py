@@ -120,6 +120,18 @@ class EmptyLayer(nn.Module):
         super(EmptyLayer, self).__init__()
 
 
+class Upsample(nn.Module):
+    """nn.Upsampleの代わり"""
+    def __init__(self,scale_factor,mode="nearest"):
+        super(Upsample,self).__init__()
+        self.scale_factor = scale_factor
+        self.mode = mode
+
+    def forward(self,x):
+        x = F.interpolate(x,scale_factor=self.scale_factor,mode=self.mode)
+        return x
+
+
 class YOLOLayer(nn.Module):
     def __init__(self, anchors, num_classes, img_dim=416):
         super(YOLOLayer, self).__init__()
