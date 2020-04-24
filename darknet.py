@@ -291,22 +291,6 @@ class Darknet(nn.Module):
             # route層の場合
             elif module_type == "route":
                 x = torch.cat([layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
-                """
-                layers = module_def["layers"]
-                layers = [int(a) for a in layers]
-
-                if layers[0] > 0:
-                    layers[0] = layers[0] - i
-                if len(layers) == 1:
-                    x = outputs[i + (layers[0])]
-                else:
-                    if layers[1] > 0:
-                        layers[1] = layers[1] - i
-                    map1 = outputs[i+layers[0]]
-                    map2 = outputs[i+layers[1]]
-
-                    x = torch.cat((map1, map2), 1)
-                """
 
             # shortcut層の場合
             elif module_type == "shortcut":
@@ -321,7 +305,7 @@ class Darknet(nn.Module):
             layer_outputs.append(x)
 
         yolo_outputs = to_cpu(torch.cat(yolo_outputs,1))
-        return detections if targets is None else(loss,yolo_outputs)
+        return yolo_outputs if targets is None else(loss,yolo_outputs)
 
     def load_weights(self, weight_file):
         #weightsファイルを開く
