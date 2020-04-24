@@ -323,50 +323,45 @@ class Darknet(nn.Module):
         return detections if targets is None else(loss,yolo_outputs)
 
     def load_weights(self, weight_file):
-        fp = open(weight_file, "rb")
-        header = np.fromfile(fp, dtype=np.int32, count=5)
-        self.header = torch.from_numpy(header)
-        self.seen = self.header[3]
-        weights = np.fromfile(fp, dtype=np.float32)
+        #weightsファイルを開く
+        with open(weight_file,"rb") as f:
+            header = np.fromfile(f, dtype=np.int32, count=5)
+            self.header = header
+            self.seen = self.header[3]
+            weights = np.fromfile(f, dtype=np.float32)
 
         # weightsファイルをネットワークのモジュールに読み込む
         ptr = 0
-        for i in range(len(self.module_list)):
-            module_type = self.module_defs[i+1]["type"]
+        for i,(module_def,module) in enumerate(zip(self.module_defs,self.module_list)):
+            module_type = module_def["type"]
+            try:
+                batch_normalize = int(module_def["batch_normalize"])
+            except:
+                batch_normalize = 0
 
             # 畳み込みのブロックの場合
             if module_type == "convolutional":
-                model = self.module_list[i]
-                try:
-                    batch_normalize = int(self.module_defs[b+1]["batch_normalize"])
-                except:
-                    batch_normalize = 0
-                conv = model[0]
+                conv_layer = module[0]
                 if batch_normalize:
-                    bn = model[1]
+                    bn = module[1]
 
                     num_bn_biases = bn.bias.numel()
 
                     bn_biases = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases])
+                        weights[ptr:ptr+num_bn_biases]).view_as(bn.bias)
                     ptr += num_bn_biases
 
                     bn_weights = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases])
+                        weights[ptr:ptr+num_bn_biases]).view_as(bn.weight)
                     ptr += num_bn_biases
 
                     bn_running_mean = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases])
+                        weights[ptr:ptr+num_bn_biases]).view_as(bn.running_mean)
                     ptr += num_bn_biases
 
                     bn_running_var = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases])
+                        weights[ptr:ptr+num_bn_biases]).view_as(bn.running_var)
                     ptr += num_bn_biases
-
-                    bn_biases = bn_biases.view_as(bn.bias.data)
-                    bn_weights = bn_weights.view_as(bn.weight.data)
-                    bn_running_mean = bn_running_mean.view_as(bn.running_mean)
-                    bn_running_var = bn_running_var.view_as(bn.running_var)
 
                     bn.bias.data.copy_(bn_biases)
                     bn.weight.data.copy_(bn_weights)
@@ -374,21 +369,18 @@ class Darknet(nn.Module):
                     bn.running_var.copy_(bn_running_var)
 
                 else:
-                    num_biases = conv.bias.numel()
-
+                    num_biases = conv_layer.bias.numel()
                     conv_biases = torch.from_numpy(weights[ptr:ptr+num_biases])
                     ptr += num_biases
+                    conv_biases = conv_biases.view_as(conv_layer.bias.data)
+                    conv_layer.bias.data.copy_(conv_biases)
 
-                    conv_biases = conv_biases.view_as(conv.bias.data)
-
-                    conv.bias.data.copy_(conv_biases)
-
-                num_weights = conv.weight.numel()
+                num_weights = conv_layer.weight.numel()
                 conv_weights = torch.from_numpy(weights[ptr:ptr+num_weights])
                 ptr += num_weights
 
-                conv_weights = conv_weights.view_as(conv.weight.data)
-                conv.weight.data.copy_(conv_weights)
+                conv_weights = conv_weights.view_as(conv_layer.weight.data)
+                conv_layer.weight.data.copy_(conv_weights)
 
 
 """このコードが正常にかけているかのテスト"""
