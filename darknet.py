@@ -269,29 +269,28 @@ class YOLOLayer(nn.Module):
 
 
 class Darknet(nn.Module):
-    def __init__(self, cfg_file):
+    def __init__(self, cfg_file,img_size=416):
         super(Darknet, self).__init__()
-        self.blocks = parse_model_config(cfg_file)
-        self.net_info, self.module_list = create_modules(self.blocks)
+        self.module_defs = parse_model_config(cfg_file)
+        self.net_info, self.module_list = create_modules(self.module_defs)
+        self.img_size = img_size
 
-    def forward(self, x, targets=None, CUDA=None):
-        if CUDA == None:
-            CUDA = torch.cuda.is_available()
-        print(x.is_cuda)
-        modules = self.blocks[1:]
-        outputs = {}  # route層のキャッシュ用
-
-        write = 0
-        for i, module in enumerate(modules):
-            module_type = module["type"]
+    def forward(self, x, targets=None):
+        img_dim = x.shape[2]
+        loss = 0
+        layer_outputs,yolo_outputs = [],[]
+        for i ,(module_def,module) in enumerate(zip(self.module_defs,self.module_list)):
+            module_type = module_def["type"]
 
             # 畳み込み層またはupsample層の場合
             if module_type == "convolutional" or module_type == "upsample":
-                x = self.module_list[i](x)
+                x = module(x)
 
             # route層の場合
             elif module_type == "route":
-                layers = module["layers"]
+                x = torch.cat([layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
+                """
+                layers = module_def["layers"]
                 layers = [int(a) for a in layers]
 
                 if layers[0] > 0:
@@ -305,29 +304,22 @@ class Darknet(nn.Module):
                     map2 = outputs[i+layers[1]]
 
                     x = torch.cat((map1, map2), 1)
+                """
 
             # shortcut層の場合
             elif module_type == "shortcut":
-                if module_type == "shortcut":
-                    from_ = int(module["from"])
-                    x = outputs[i-1] + outputs[i+from_]
+                from_ = int(module_def["from"])
+                x = layer_outputs[-1] + layer_outputs[from_]
 
+            # yolo層の場合
             elif module_type == "yolo":
-                anchors = self.module_list[i][0].anchors
-                inp_dim = int(self.net_info["height"])
-                num_classes = int(module["classes"])
+                x,layer_loss = module[0](x,targets,img_dim)
+                loss += layer_loss
+                yolo_outputs.append(x)
+            layer_outputs.append(x)
 
-                x = x.data
-                x = predict_transform(x, inp_dim, anchors, num_classes, CUDA)
-                if not write:
-                    detections = x
-                    write = 1
-                else:
-                    detections = torch.cat((detections, x), 1)
-
-            outputs[i] = x
-
-        return detections
+        yolo_outputs = to_cpu(torch.cat(yolo_outputs,1))
+        return detections if targets is None else(loss,yolo_outputs)
 
     def load_weights(self, weight_file):
         fp = open(weight_file, "rb")
@@ -339,13 +331,13 @@ class Darknet(nn.Module):
         # weightsファイルをネットワークのモジュールに読み込む
         ptr = 0
         for i in range(len(self.module_list)):
-            module_type = self.blocks[i+1]["type"]
+            module_type = self.module_defs[i+1]["type"]
 
             # 畳み込みのブロックの場合
             if module_type == "convolutional":
                 model = self.module_list[i]
                 try:
-                    batch_normalize = int(self.blocks[i+1]["batch_normalize"])
+                    batch_normalize = int(self.module_defs[b+1]["batch_normalize"])
                 except:
                     batch_normalize = 0
                 conv = model[0]
