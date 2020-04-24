@@ -27,11 +27,11 @@ def create_modules(blocks):
     """
     parse_model_config()関数で読み込んだ情報をPyTorchのレイヤーを重ねてモジュール化する
     """
-    net_info = blocks[0]
+    net_info = blocks.pop(0)
     module_list = nn.ModuleList()
     output_filters = [int(net_info["channels"])]
 
-    for idx, module_def in enumerate(blocks[1:]):  # block[0]はハイパーパラメータなので除いている
+    for idx, module_def in enumerate(blocks):
         module = nn.Sequential()
         module_type = module_def["type"]
 
@@ -44,10 +44,10 @@ def create_modules(blocks):
             stride = int(module_def["stride"])
             try:
                 batch_normalize = int(module_def["batch_normalize"])
-                bias = False
+                bias = True
             except:
                 batch_normalize = 0
-                bias = True
+                bias = False
 
             if padding:
                 pad = (kernel_size - 1) // 2
