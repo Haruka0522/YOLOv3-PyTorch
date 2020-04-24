@@ -104,6 +104,8 @@ def create_modules(blocks):
 
         # yolo層の場合
         elif x["type"] == "yolo":
+            num_classes = int(x["classes"])
+            img_size = int(net_info["height"])
             mask = x["mask"].split(",")
             mask = [int(x) for x in mask]
 
@@ -113,7 +115,7 @@ def create_modules(blocks):
                        for i in range(0, len(anchors), 2)]  # 2つづつのタプルに区切る
             anchors = [anchors[i] for i in mask]
 
-            detection = YOLOLayer(anchors)
+            detection = YOLOLayer(anchors,num_classes,img_size)
             module.add_module("yolo_{0}".format(idx), detection)
 
         module_list.append(module)
