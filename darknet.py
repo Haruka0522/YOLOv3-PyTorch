@@ -32,12 +32,13 @@ def create_modules(blocks):
     prev_filters = 3  # RGBで３層だから3を設定
     output_filters = []
 
-    for idx, x in enumerate(blocks[1:]):  # block[0]はハイパーパラメータなので除いている
+    for idx, module_def in enumerate(blocks[1:]):  # block[0]はハイパーパラメータなので除いている
         module = nn.Sequential()
+        module_type = module_def["type"]
 
         # 畳み込み層の場合
-        if x["type"] == "convolutional":
-            activation = x["activation"]
+        if module_type == "convolutional":
+            activation = module_def["activation"]
             try:
                 batch_normalize = int(x["batch_normalize"])
                 bias = False
@@ -45,10 +46,10 @@ def create_modules(blocks):
                 batch_normalize = 0
                 bias = True
 
-            filters = int(x["filters"])
-            padding = int(x["pad"])
-            kernel_size = int(x["size"])
-            stride = int(x["stride"])
+            filters = int(module_def["filters"])
+            padding = int(module_def["pad"])
+            kernel_size = int(module_def["size"])
+            stride = int(module_def["stride"])
 
             if padding:
                 pad = (kernel_size - 1) // 2
@@ -72,18 +73,18 @@ def create_modules(blocks):
                 module.add_module("leaky_{0}".format(idx), activn)
 
         # upsampling層の場合
-        elif (x["type"] == "upsample"):
-            stride = int(x["stride"])
-            upsample = nn.Upsample(scale_factor=stride, mode="bilinear")
+        elif (module_def["type"] == "upsample"):
+            stride = int(module_def["stride"])
+            upsample = nn.Upsample(scale_factor=stride, mode="nearest")
             module.add_module("upsample_{0}".format(idx), upsample)
 
         # route層の場合
-        elif (x["type"] == "route"):
-            x["layers"] = x["layers"].split(",")
-            start = int(x["layers"][0])
+        elif (module_def["type"] == "route"):
+            module_def["layers"] = module_def["layers"].split(",")
+            start = int(module_def["layers"][0])
             # endの指定があるときはその値、ないときは0を補完
             try:
-                end = int(x["layers"][1])
+                end = int(module_def["layers"][1])
             except:
                 end = 0
             if start > 0:
@@ -98,18 +99,18 @@ def create_modules(blocks):
                 filters = output_filters[idx+start]
 
         # short cut層の場合
-        elif x["type"] == "shortcut":
+        elif module_def["type"] == "shortcut":
             shortcut = EmptyLayer()
             module.add_module("shortcut_{0}".format(idx), shortcut)
 
         # yolo層の場合
-        elif x["type"] == "yolo":
-            num_classes = int(x["classes"])
+        elif module_def["type"] == "yolo":
+            num_classes = int(module_def["classes"])
             img_size = int(net_info["height"])
-            mask = x["mask"].split(",")
+            mask = module_def["mask"].split(",")
             mask = [int(x) for x in mask]
 
-            anchors = x["anchors"].split(",")
+            anchors = module_def["anchors"].split(",")
             anchors = [int(x) for x in anchors]
             anchors = [(anchors[i], anchors[i+1])
                        for i in range(0, len(anchors), 2)]  # 2つづつのタプルに区切る
