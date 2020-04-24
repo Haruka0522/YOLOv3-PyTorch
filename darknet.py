@@ -40,7 +40,7 @@ def create_modules(blocks):
         if module_type == "convolutional":
             activation = module_def["activation"]
             try:
-                batch_normalize = int(x["batch_normalize"])
+                batch_normalize = int(module_def["batch_normalize"])
                 bias = False
             except:
                 batch_normalize = 0
