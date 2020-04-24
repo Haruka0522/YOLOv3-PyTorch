@@ -29,8 +29,7 @@ def create_modules(blocks):
     """
     net_info = blocks[0]
     module_list = nn.ModuleList()
-    prev_filters = 3  # RGBで３層だから3を設定
-    output_filters = []
+    output_filters = [int(net_info["channels"])]
 
     for idx, module_def in enumerate(blocks[1:]):  # block[0]はハイパーパラメータなので除いている
         module = nn.Sequential()
@@ -39,6 +38,10 @@ def create_modules(blocks):
         # 畳み込み層の場合
         if module_type == "convolutional":
             activation = module_def["activation"]
+            filters = int(module_def["filters"])
+            padding = int(module_def["pad"])
+            kernel_size = int(module_def["size"])
+            stride = int(module_def["stride"])
             try:
                 batch_normalize = int(module_def["batch_normalize"])
                 bias = False
@@ -46,67 +49,53 @@ def create_modules(blocks):
                 batch_normalize = 0
                 bias = True
 
-            filters = int(module_def["filters"])
-            padding = int(module_def["pad"])
-            kernel_size = int(module_def["size"])
-            stride = int(module_def["stride"])
-
             if padding:
                 pad = (kernel_size - 1) // 2
             else:
                 pad = 0
 
             # 畳み込み層を追加
-            conv = nn.Conv2d(prev_filters, filters,
-                             kernel_size, stride, pad, bias=bias)
-            module.add_module("conv_{0}".format(
-                idx), conv)  # indexの名前で層を追加している
+            conv = nn.Conv2d(
+                    in_channels=output_filters[-1],
+                    out_channels=filters,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=pad,
+                    bias=bias
+                    )
+            module.add_module("conv_{}".format(idx), conv)  # indexの名前で層を追加している
 
             # batch normalization層を追加
             if batch_normalize:
-                bn = nn.BatchNorm2d(filters)
+                bn = nn.BatchNorm2d(filters,momentum=0.9,eps=1e-5)
                 module.add_module("batch_norm_{0}".format(idx), bn)
 
             # activationをチェック
             if activation == "leaky":
-                activn = nn.LeakyReLU(0.1, inplace=True)
+                activn = nn.LeakyReLU(0.1)
                 module.add_module("leaky_{0}".format(idx), activn)
 
         # upsampling層の場合
-        elif (module_def["type"] == "upsample"):
+        elif module_type == "upsample":
             stride = int(module_def["stride"])
             upsample = nn.Upsample(scale_factor=stride, mode="nearest")
             module.add_module("upsample_{0}".format(idx), upsample)
 
         # route層の場合
-        elif (module_def["type"] == "route"):
-            module_def["layers"] = module_def["layers"].split(",")
-            start = int(module_def["layers"][0])
-            # endの指定があるときはその値、ないときは0を補完
-            try:
-                end = int(module_def["layers"][1])
-            except:
-                end = 0
-            if start > 0:
-                start = start - idx
-            if end > 0:
-                end = end - idx
+        elif module_type == "route":
+            layers = [int(x) for x in module_def["layers"].split(",")]
+            filters = sum([output_filters[1:][i] for i in layers])
             route = EmptyLayer()
             module.add_module("route_{0}".format(idx), route)
-            if end < 0:
-                filters = output_filters[idx+start] + output_filters[idx+end]
-            else:
-                filters = output_filters[idx+start]
 
         # short cut層の場合
-        elif module_def["type"] == "shortcut":
+        elif module_type == "shortcut":
+            filters = output_filters[1:][int(module_def["from"])]
             shortcut = EmptyLayer()
             module.add_module("shortcut_{0}".format(idx), shortcut)
 
         # yolo層の場合
-        elif module_def["type"] == "yolo":
-            num_classes = int(module_def["classes"])
-            img_size = int(net_info["height"])
+        elif module_type == "yolo":
             mask = module_def["mask"].split(",")
             mask = [int(x) for x in mask]
 
@@ -115,15 +104,15 @@ def create_modules(blocks):
             anchors = [(anchors[i], anchors[i+1])
                        for i in range(0, len(anchors), 2)]  # 2つづつのタプルに区切る
             anchors = [anchors[i] for i in mask]
-
-            detection = YOLOLayer(anchors,num_classes,img_size)
-            module.add_module("yolo_{0}".format(idx), detection)
+            num_classes = int(module_def["classes"])
+            img_size = int(net_info["height"])
+            yolo_layer = YOLOLayer(anchors,num_classes,img_size)
+            module.add_module("yolo_{0}".format(idx), yolo_layer)
 
         module_list.append(module)
-        prev_filters = filters
         output_filters.append(filters)
 
-    return (net_info, module_list)
+    return net_info, module_list
 
 
 class EmptyLayer(nn.Module):
