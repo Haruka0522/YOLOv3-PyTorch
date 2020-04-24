@@ -68,31 +68,31 @@ def create_modules(blocks):
             # batch normalization層を追加
             if batch_normalize:
                 bn = nn.BatchNorm2d(filters,momentum=0.9,eps=1e-5)
-                module.add_module("batch_norm_{0}".format(idx), bn)
+                module.add_module("batch_norm_{}".format(idx), bn)
 
             # activationをチェック
             if activation == "leaky":
                 activn = nn.LeakyReLU(0.1)
-                module.add_module("leaky_{0}".format(idx), activn)
+                module.add_module("leaky_{}".format(idx), activn)
 
         # upsampling層の場合
         elif module_type == "upsample":
             stride = int(module_def["stride"])
             upsample = Upsample(scale_factor=stride,mode="nearest")
-            module.add_module("upsample_{0}".format(idx), upsample)
+            module.add_module("upsample_{}".format(idx), upsample)
 
         # route層の場合
         elif module_type == "route":
             layers = [int(x) for x in module_def["layers"].split(",")]
             filters = sum([output_filters[1:][i] for i in layers])
             route = EmptyLayer()
-            module.add_module("route_{0}".format(idx), route)
+            module.add_module("route_{}".format(idx), route)
 
         # short cut層の場合
         elif module_type == "shortcut":
             filters = output_filters[1:][int(module_def["from"])]
             shortcut = EmptyLayer()
-            module.add_module("shortcut_{0}".format(idx), shortcut)
+            module.add_module("shortcut_{}".format(idx), shortcut)
 
         # yolo層の場合
         elif module_type == "yolo":
@@ -107,7 +107,7 @@ def create_modules(blocks):
             num_classes = int(module_def["classes"])
             img_size = int(net_info["height"])
             yolo_layer = YOLOLayer(anchors,num_classes,img_size)
-            module.add_module("yolo_{0}".format(idx), yolo_layer)
+            module.add_module("yolo_{}".format(idx), yolo_layer)
 
         module_list.append(module)
         output_filters.append(filters)
@@ -275,7 +275,10 @@ class Darknet(nn.Module):
         super(Darknet, self).__init__()
         self.module_defs = parse_model_config(cfg_file)
         self.net_info, self.module_list = create_modules(self.module_defs)
+        self.yolo_layers = [layer[0] for layer in self.module_list if hasattr(layer[0], "metrics")]
         self.img_size = img_size
+        self.seen = 0
+        self.header_info = np.array([0, 0, 0, self.seen, 0], dtype=np.int32)
 
     def forward(self, x, targets=None):
         img_dim = x.shape[2]
@@ -311,8 +314,8 @@ class Darknet(nn.Module):
         #weightsファイルを開く
         with open(weight_file,"rb") as f:
             header = np.fromfile(f, dtype=np.int32, count=5)
-            self.header = header
-            self.seen = self.header[3]
+            self.header_info = header
+            self.seen = header[3]
             weights = np.fromfile(f, dtype=np.float32)
 
         # weightsファイルをネットワークのモジュールに読み込む
@@ -328,30 +331,30 @@ class Darknet(nn.Module):
             if module_type == "convolutional":
                 conv_layer = module[0]
                 if batch_normalize:
-                    bn = module[1]
+                    bn_layer = module[1]
 
-                    num_bn_biases = bn.bias.numel()
+                    num_bn_biases = bn_layer.bias.numel()
 
                     bn_biases = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases]).view_as(bn.bias)
+                        weights[ptr:ptr+num_bn_biases]).view_as(bn_layer.bias)
                     ptr += num_bn_biases
 
                     bn_weights = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases]).view_as(bn.weight)
+                        weights[ptr:ptr+num_bn_biases]).view_as(bn_layer.weight)
                     ptr += num_bn_biases
 
                     bn_running_mean = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases]).view_as(bn.running_mean)
+                        weights[ptr:ptr+num_bn_biases]).view_as(bn_layer.running_mean)
                     ptr += num_bn_biases
 
                     bn_running_var = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases]).view_as(bn.running_var)
+                        weights[ptr:ptr+num_bn_biases]).view_as(bn_layer.running_var)
                     ptr += num_bn_biases
 
-                    bn.bias.data.copy_(bn_biases)
-                    bn.weight.data.copy_(bn_weights)
-                    bn.running_mean.copy_(bn_running_mean)
-                    bn.running_var.copy_(bn_running_var)
+                    bn_layer.bias.data.copy_(bn_biases)
+                    bn_layer.weight.data.copy_(bn_weights)
+                    bn_layer.running_mean.copy_(bn_running_mean)
+                    bn_layer.running_var.copy_(bn_running_var)
 
                 else:
                     num_biases = conv_layer.bias.numel()
