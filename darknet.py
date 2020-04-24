@@ -78,7 +78,7 @@ def create_modules(blocks):
         # upsampling層の場合
         elif module_type == "upsample":
             stride = int(module_def["stride"])
-            upsample = nn.Upsample(scale_factor=stride, mode="nearest")
+            upsample = Upsample(scale_factor=stride,mode="nearest")
             module.add_module("upsample_{0}".format(idx), upsample)
 
         # route層の場合
