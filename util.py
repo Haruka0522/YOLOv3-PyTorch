@@ -231,4 +231,4 @@ def to_cpu(tensor):
     PyTorchのTensor型には勾配やGPUの情報が含まれている。
     このままではただの値を取り出しにくいためGPU情報や勾配情報を捨てる
     """
-    return tensor.detach.cpu()
+    return tensor.detach().cpu()
