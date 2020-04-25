@@ -4,16 +4,14 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
-from datasets import *
+from datasets import ImageFolder
 import numpy as np
 import cv2
-from util import *
+from util import load_classes, non_max_suppres_thres_process, rescale_boxes
 import argparse
 import os
-import os.path as osp
 from darknet import Darknet
 import pickle as pkl
-import pandas as pd
 import random
 
 
@@ -68,39 +66,42 @@ if not os.path.exists(args.det):
     os.makedirs(args.det)
 
 dataloader = DataLoader(
-        ImageFolder(args.images),
-        batch_size = int(args.bs),
-        shuffle=False,
-        num_workers=4)
+    ImageFolder(args.images),
+    batch_size=int(args.bs),
+    shuffle=False,
+    num_workers=4)
 
 imgs = []
 img_detections = []
 
-#推論
-for batch_i,(img_paths,input_imgs) in enumerate(dataloader):
+# 推論
+for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
     input_imgs = Variable(input_imgs.type(Tensor))
 
     with torch.no_grad():
         detections = model(input_imgs)
-        detections = non_max_suppres_thres_process(detections,confidence,nms_thesh)
+        detections = non_max_suppres_thres_process(
+            detections, confidence, nms_thesh)
 
     imgs.extend(img_paths)
     img_detections.extend(detections)
 
-#結果を画像に描画
-for img_i,(path,detections) in enumerate(zip(imgs,img_detections)):
+# 結果を画像に描画
+for img_i, (path, detections) in enumerate(zip(imgs, img_detections)):
     img_cv = cv2.imread(path)
     if detections is not None:
-        detections = rescale_boxes(detections,int(args.reso),img_cv.shape[:2])
-        unique_labels = detections[:,-1].cpu().unique()
+        detections = rescale_boxes(
+            detections, int(args.reso), img_cv.shape[:2])
+        unique_labels = detections[:, -1].cpu().unique()
         n_cls_preds = len(unique_labels)
-        colors = pkl.load(open("pallete","rb"))
-        for x1,y1,x2,y2,conf,cls_conf,cls_pred in detections:
+        colors = pkl.load(open("pallete", "rb"))
+        for x1, y1, x2, y2, conf, cls_conf, cls_pred in detections:
             color = random.choice(colors)
-            cv2.rectangle(img_cv,(x1,y1),(x2,y2),color,thickness=2)
+            cv2.rectangle(img_cv, (x1, y1), (x2, y2), color, thickness=2)
             label = classes[int(cls_pred)]
-            cv2.putText(img_cv,label,(x1,y1),cv2.FONT_HERSHEY_PLAIN,1.5,color,2)
-            cv2.imwrite(args.det+"/result_"+str(img_i)+".jpg",img_cv)
+            cv2.putText(img_cv, label, (x1, y1),
+                        cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2)
+            cv2.imwrite(args.det+"/result_"+str(img_i)+".jpg", img_cv)
 
 """
 # 結果のprint
