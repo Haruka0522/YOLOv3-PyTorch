@@ -7,14 +7,14 @@ from torch.autograd import Variable
 import numpy as np
 import cv2
 
-from util import *
+from util import to_cpu, build_targets
 
-from parse_config import *
+from parse_config import parse_model_config
 
 
 def get_test_input():
     img = cv2.imread("dog-cycle-car.png")
-    img = cv2.resize(img, (416,416))
+    img = cv2.resize(img, (416, 416))
     img_ = img[:, :, ::-1].transpose((2, 0, 1))
     img_ = img_[np.newaxis, :, :, :] / 255.0
     img_ = torch.from_numpy(img_).float()
@@ -56,18 +56,18 @@ def create_modules(blocks):
 
             # 畳み込み層を追加
             conv = nn.Conv2d(
-                    in_channels=output_filters[-1],
-                    out_channels=filters,
-                    kernel_size=kernel_size,
-                    stride=stride,
-                    padding=pad,
-                    bias=bias
-                    )
+                in_channels=output_filters[-1],
+                out_channels=filters,
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=pad,
+                bias=bias
+            )
             module.add_module("conv_{}".format(idx), conv)  # indexの名前で層を追加している
 
             # batch normalization層を追加
             if batch_normalize:
-                bn = nn.BatchNorm2d(filters,momentum=0.9,eps=1e-5)
+                bn = nn.BatchNorm2d(filters, momentum=0.9, eps=1e-5)
                 module.add_module("batch_norm_{}".format(idx), bn)
 
             # activationをチェック
@@ -78,7 +78,7 @@ def create_modules(blocks):
         # upsampling層の場合
         elif module_type == "upsample":
             stride = int(module_def["stride"])
-            upsample = Upsample(scale_factor=stride,mode="nearest")
+            upsample = Upsample(scale_factor=stride, mode="nearest")
             module.add_module("upsample_{}".format(idx), upsample)
 
         # route層の場合
@@ -106,7 +106,7 @@ def create_modules(blocks):
             anchors = [anchors[i] for i in mask]
             num_classes = int(module_def["classes"])
             img_size = int(net_info["height"])
-            yolo_layer = YOLOLayer(anchors,num_classes,img_size)
+            yolo_layer = YOLOLayer(anchors, num_classes, img_size)
             module.add_module("yolo_{}".format(idx), yolo_layer)
 
         module_list.append(module)
@@ -122,13 +122,14 @@ class EmptyLayer(nn.Module):
 
 class Upsample(nn.Module):
     """nn.Upsampleの代わり"""
-    def __init__(self,scale_factor,mode="nearest"):
-        super(Upsample,self).__init__()
+
+    def __init__(self, scale_factor, mode="nearest"):
+        super(Upsample, self).__init__()
         self.scale_factor = scale_factor
         self.mode = mode
 
-    def forward(self,x):
-        x = F.interpolate(x,scale_factor=self.scale_factor,mode=self.mode)
+    def forward(self, x):
+        x = F.interpolate(x, scale_factor=self.scale_factor, mode=self.mode)
         return x
 
 
@@ -271,11 +272,12 @@ class YOLOLayer(nn.Module):
 
 
 class Darknet(nn.Module):
-    def __init__(self, cfg_file,img_size=416):
+    def __init__(self, cfg_file, img_size=416):
         super(Darknet, self).__init__()
         self.module_defs = parse_model_config(cfg_file)
         self.net_info, self.module_list = create_modules(self.module_defs)
-        self.yolo_layers = [layer[0] for layer in self.module_list if hasattr(layer[0], "metrics")]
+        self.yolo_layers = [layer[0]
+                            for layer in self.module_list if hasattr(layer[0], "metrics")]
         self.img_size = img_size
         self.seen = 0
         self.header_info = np.array([0, 0, 0, self.seen, 0], dtype=np.int32)
@@ -283,8 +285,8 @@ class Darknet(nn.Module):
     def forward(self, x, targets=None):
         img_dim = x.shape[2]
         loss = 0
-        layer_outputs,yolo_outputs = [],[]
-        for i ,(module_def,module) in enumerate(zip(self.module_defs,self.module_list)):
+        layer_outputs, yolo_outputs = [], []
+        for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
             module_type = module_def["type"]
 
             # 畳み込み層またはupsample層の場合
@@ -293,7 +295,8 @@ class Darknet(nn.Module):
 
             # route層の場合
             elif module_type == "route":
-                x = torch.cat([layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
+                x = torch.cat([layer_outputs[int(layer_i)]
+                               for layer_i in module_def["layers"].split(",")], 1)
 
             # shortcut層の場合
             elif module_type == "shortcut":
@@ -302,17 +305,17 @@ class Darknet(nn.Module):
 
             # yolo層の場合
             elif module_type == "yolo":
-                x,layer_loss = module[0](x,targets,img_dim)
+                x, layer_loss = module[0](x, targets, img_dim)
                 loss += layer_loss
                 yolo_outputs.append(x)
             layer_outputs.append(x)
 
-        yolo_outputs = to_cpu(torch.cat(yolo_outputs,1))
-        return yolo_outputs if targets is None else(loss,yolo_outputs)
+        yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1))
+        return yolo_outputs if targets is None else(loss, yolo_outputs)
 
     def load_weights(self, weight_file):
-        #weightsファイルを開く
-        with open(weight_file,"rb") as f:
+        # weightsファイルを開く
+        with open(weight_file, "rb") as f:
             header = np.fromfile(f, dtype=np.int32, count=5)
             self.header_info = header
             self.seen = header[3]
@@ -320,7 +323,7 @@ class Darknet(nn.Module):
 
         # weightsファイルをネットワークのモジュールに読み込む
         ptr = 0
-        for i,(module_def,module) in enumerate(zip(self.module_defs,self.module_list)):
+        for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
             module_type = module_def["type"]
             try:
                 batch_normalize = int(module_def["batch_normalize"])
@@ -373,8 +376,8 @@ class Darknet(nn.Module):
 
 """このコードが正常にかけているかのテスト"""
 """
-#blocks = parse_model_config("cfg/yolov3.cfg")
-#print(create_modules(blocks))
+blocks = parse_model_config("cfg/yolov3.cfg")
+print(create_modules(blocks))
 """
 """
 model = Darknet("cfg/yolov3.cfg")
