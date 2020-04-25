@@ -181,7 +181,6 @@ class YOLOLayer(nn.Module):
         )
 
         # 出力
-        print(prediction.shape)
         x = torch.sigmoid(prediction[..., 0])  # center x
         y = torch.sigmoid(prediction[..., 1])  # center y
         w = prediction[..., 2]  # width
