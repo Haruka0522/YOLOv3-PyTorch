@@ -14,7 +14,7 @@ from parse_config import *
 
 def get_test_input():
     img = cv2.imread("dog-cycle-car.png")
-    img = cv2.resize(img, (416, 416))
+    img = cv2.resize(img, (416,416))
     img_ = img[:, :, ::-1].transpose((2, 0, 1))
     img_ = img_[np.newaxis, :, :, :] / 255.0
     img_ = torch.from_numpy(img_).float()
@@ -186,8 +186,8 @@ class YOLOLayer(nn.Module):
         y = torch.sigmoid(prediction[..., 1])  # center y
         w = prediction[..., 2]  # width
         h = prediction[..., 3]  # height
-        pred_conf = torch.sigmoid(prediction[..., 0])  # conf
-        pred_cls = torch.sigmoid(prediction[..., 5])  # 予想されたclass
+        pred_conf = torch.sigmoid(prediction[..., 4])  # conf
+        pred_cls = torch.sigmoid(prediction[..., 5:])  # 予想されたclass
 
         # grid_sizeと今が一致していない場合、新しくオフセットを計算する
         if grid_size != self.grid_size:
@@ -209,17 +209,18 @@ class YOLOLayer(nn.Module):
             -1
         )
 
-        # targetsが指定されなかった場合
+        # targetsが指定されなかった場合(学習段階のとき)
         if targets is None:
             return output, 0
 
+        # Detectionをするとき
         else:
             iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf = build_targets(
                 pred_boxes=pred_boxes,
                 pred_cls=pred_cls,
                 target=targets,
                 anchors=self.scaled_anchors,
-                ignore_thres=self.ignore_thres,
+                ignore_thres=self.ignore_thres
             )
 
             # 存在しないオブジェクトを無視するようにする
@@ -379,7 +380,7 @@ class Darknet(nn.Module):
 """
 model = Darknet("cfg/yolov3.cfg")
 inp = get_test_input()
-pred = model(inp, torch.cuda.is_available())
+pred = model(inp)
 print(pred)
 """
 """
