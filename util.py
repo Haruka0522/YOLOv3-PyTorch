@@ -1,9 +1,6 @@
 from __future__ import division
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
 import numpy as np
 import cv2
 
@@ -32,22 +29,12 @@ def bbox_iou(box1, box2):
     return iou
 
 
-def unique(tensor):
-    tensor_np = tensor.cpu().numpy()
-    unique_np = np.unique(tensor_np)
-    unique_tensor = torch.from_numpy(unique_np)
-    tensor_res = tensor.new(unique_tensor.shape)
-    tensor_res.copy_(unique_tensor)
-
-    return tensor_res
-
-
 def predict_transform(
         prediction, inp_dim, anchors, num_classes, CUDA=None):
     """
     検出マップを受け取って２次元テンソルに変換する
     """
-    if CUDA == None:
+    if CUDA is None:
         CUDA = torch.cuda.is_available()
     batch_size = prediction.size(0)
     stride = inp_dim // prediction.size(2)
@@ -97,94 +84,51 @@ def predict_transform(
     return prediction
 
 
-def write_results(prediction, confidence, num_classes, nms_conf=0.4):
+def non_max_suppres_thres_process(prediction, obj_thres=0.5, nms_thres=0.4):
     """
     predict結果を受け取って、objectness scoreのしきい値処理とNon-maximal suppressionを行う
     また、その結果を書き出す
-    confidenceはobjectness scoreのしきい値
-    nms_confはIoUのしきい値
+    obj_thresはobjectness scoreのしきい値
+    nms_thresはIoUのしきい値
     """
-    conf_mask = (prediction[:, :, 4] > confidence).float().unsqueeze(2)
-    prediction = prediction * conf_mask
+    # (center_x,center_y,width,height)から(x1,y1,x2,y2)に変換する
+    prediction[..., :4] = xywh2xyxy(prediction[..., :4])
 
-    # IoUの計算
-    box_corner = prediction.new(prediction.shape)
-    box_corner[:, :, 0] = prediction[:, :, 0] - prediction[:, :, 2] / 2
-    box_corner[:, :, 1] = prediction[:, :, 1] - prediction[:, :, 3] / 2
-    box_corner[:, :, 2] = prediction[:, :, 0] + prediction[:, :, 2] / 2
-    box_corner[:, :, 3] = prediction[:, :, 1] + prediction[:, :, 3] / 2
-    prediction[:, :, :4] = box_corner[:, :, :4]
+    # Noneで埋められた初期outputを生成
+    output = [None for _ in range(len(prediction))]
 
-    batch_size = prediction.size(0)
+    for image_i, image_pred in enumerate(prediction):
+        # objectness scoreのしきい値以下のものを除外
+        image_pred = image_pred[image_pred[:, 4] >= obj_thres]
 
-    write = False  # 初期化していないフラグ
-
-    for idx in range(batch_size):
-        image_pred = prediction[idx]
-        max_conf, max_conf_score = torch.max(image_pred[:, 5:5+num_classes], 1)
-        max_conf = max_conf.float().unsqueeze(1)
-        max_conf_score = max_conf_score.float().unsqueeze(1)
-        seq = (image_pred[:, :5], max_conf, max_conf_score)
-        image_pred = torch.cat(seq, 1)
-
-        non_zero_idx = torch.nonzero(image_pred[:, 4])
-        try:
-            image_pred_ = image_pred[non_zero_idx.squeeze(), :].view(-1, 7)
-        except:
-            continue
-        if image_pred_.shape[0] == 0:
+        # Noneが残っている場合はcontinue
+        if not image_pred.size(0):
             continue
 
-        img_classes = unique(image_pred_[:, -1])  # 検出されたクラス
+        # objectness scoreでソート
+        score = image_pred[:, 4] * image_pred[:, 5:].max(1)[0]
+        image_pred = image_pred[(-score).argsort()]
+        class_confs, class_preds = image_pred[:, 5:].max(1, keepdim=True)
+        detections = torch.cat(
+            (image_pred[:, :5], class_confs.float(), class_preds.float()), 1)
 
-        # NMSをクラスごとに実行
-        for cls in img_classes:
-            cls_mask = image_pred_ * \
-                (image_pred_[:, -1] == cls).float().unsqueeze(1)
-            class_mask_idx = torch.nonzero(cls_mask[:, -2]).squeeze()
-            image_pred_class = image_pred_[class_mask_idx].view(-1, 7)
+        # non-maximum suppressionの処理
+        keep_boxes = []
+        while detections.size(0):
+            # IoUの計算としきい値処理
+            large_overlap = bbox_iou(detections[0, :4].unsqueeze(
+                0), detections[:, :4]) > nms_thres
+            label_match = detections[0, -1] == detections[:, -1]
+            invalid = large_overlap & label_match
+            weights = detections[invalid, 4:5]
+            detections[0, :4] = (
+                weights * detections[invalid, :4]).sum(0) / weights.sum()
+            keep_boxes += [detections[0]]
+            detections = detections[~invalid]
+        if keep_boxes:
+            output[image_i] = torch.stack(keep_boxes)
 
-            # objectnessでsort
-            conf_sort_index = torch.sort(
-                image_pred_class[:, 4], descending=True)[1]
-            image_pred_class = image_pred_class[conf_sort_index]
-            indx = image_pred_class.size(0)  # 検出されたnumber
-
-            # ここからがNMSの処理
-            for i in range(indx):
-                try:
-                    ious = bbox_iou(image_pred_class[i].unsqueeze(
-                        0), image_pred_class[i+1:])
-                except ValueError:
-                    break
-                except IndexError:
-                    break
-                iou_mask = (ious < nms_conf).float().unsqueeze(1)
-                image_pred_class[i+1:] *= iou_mask
-
-                non_zero_idx = torch.nonzero(image_pred_class[:, 4]).squeeze()
-                image_pred_class = image_pred_class[non_zero_idx].view(-1, 7)
-
-            batch_idx = image_pred_class.new(
-                image_pred_class.size(0), 1).fill_(idx)
-            seq = batch_idx, image_pred_class
-
-            if not write:
-                output = torch.cat(seq, 1)
-                write = True
-            else:
-                out = torch.cat(seq, 1)
-                output = torch.cat((output, out))
-    try:
-        return output
-    except:
-        return 0
-
-
-def load_classes(namesfile):
-    fp = open(namesfile, "r")
-    names = fp.read().split("\n")[:-1]
-    return names
+    return output
 
 
 def letterbox_image(img, inp_dim):
@@ -218,7 +162,7 @@ def load_classes(path):
     """
     クラスのconfigファイルを読み込む
     """
-    fp = open(path,"r")
+    fp = open(path, "r")
     names = fp.read().split("\n")[:-1]
     return names
 
@@ -230,3 +174,113 @@ def weights_init_normal(m):
     elif classname.find("BatchNorm2d") != -1:
         torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
+
+
+def to_cpu(tensor):
+    """
+    PyTorchのTensor型には勾配やGPUの情報が含まれている。
+    このままではただの値を取り出しにくいためGPU情報や勾配情報を捨てる
+    """
+    return tensor.detach().cpu()
+
+
+def build_targets(pred_boxes, pred_cls, target, anchors, iou_thres):
+
+    ByteTensor = torch.cuda.ByteTensor if pred_boxes.is_cuda else torch.ByteTensor
+    FloatTensor = torch.cuda.FloatTensor if pred_boxes.is_cuda else torch.FloatTensor
+
+    nB = pred_boxes.size(0)
+    nA = pred_boxes.size(1)
+    nC = pred_cls.size(-1)
+    nG = pred_boxes.size(2)
+
+    # 出力用Tensor
+    obj_mask = ByteTensor(nB, nA, nG, nG).fill_(0)
+    noobj_mask = ByteTensor(nB, nA, nG, nG).fill_(1)
+    class_mask = FloatTensor(nB, nA, nG, nG).fill_(0)
+    iou_scores = FloatTensor(nB, nA, nG, nG).fill_(0)
+    tx = FloatTensor(nB, nA, nG, nG).fill_(0)
+    ty = FloatTensor(nB, nA, nG, nG).fill_(0)
+    tw = FloatTensor(nB, nA, nG, nG).fill_(0)
+    th = FloatTensor(nB, nA, nG, nG).fill_(0)
+    tcls = FloatTensor(nB, nA, nG, nG, nC).fill_(0)
+
+    # boxを基準とする座標情報に変換
+    target_boxes = target[:, 2:6] * nG
+    gxy = target_boxes[:, :2]
+    gwh = target_boxes[:, 2:]
+
+    # IoUの計算結果からanchorを取得
+    ious = torch.stack([bbox_wh_iou(anchor, gwh) for anchor in anchors])
+    best_ious, best_n = ious.max(0)
+
+    b, target_labels = target[:, :2].long().t()
+    gx, gy = gxy.t()
+    gw, gh = gwh.t()
+    gi, gj = gxy.long().t()
+
+    # mask
+    obj_mask[b, best_n, gj, gi] = 1
+    noobj_mask[b, best_n, gj, gi] = 0
+
+    # IoUのしきい値処理
+    for i, anchor_ious in enumerate(ious.t()):
+        noobj_mask[b[i], anchor_ious > iou_thres, gj[i], gi[i]] = 0
+
+    # 座標
+    tx[b, best_n, gj, gi] = gx - gx.floor()
+    ty[b, best_n, gj, gi] = gy - gy.floor()
+
+    # widthとheight
+    tw[b, best_n, gj, gi] = torch.log(gw / anchors[best_n][:, 0] + 1e-16)
+    th[b, best_n, gj, gi] = torch.log(gh / anchors[best_n][:, 1] + 1e-16)
+
+    # One-hot encoding of label
+    tcls[b, best_n, gj, gi, target_labels] = 1
+
+    # 一番良いanchorを計算
+    class_mask[b, best_n, gj, gi] = (
+        pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
+    iou_scores[b, best_n, gj, gi] = bbox_iou(
+        pred_boxes[b, best_n, gj, gi], target_boxes, x1y1x2y2=False)
+
+    tconf = obj_mask.float()
+
+    return_info = \
+        [iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf]
+
+    return return_info
+
+
+def rescale_boxes(boxes, current_dim, original_shape):
+    """ bouding boxを元画像の形状に合うように計算する """
+    orig_h, orig_w = original_shape
+
+    # 追加されたpaddingの量
+    pad_x = max(orig_h - orig_w, 0) * (current_dim / max(original_shape))
+    pad_y = max(orig_w - orig_h, 0) * (current_dim / max(original_shape))
+
+    # 追加されたpaddingを削除
+    unpad_h = current_dim - pad_y
+    unpad_w = current_dim - pad_x
+
+    # 元の画像のサイズに修正
+    boxes[:, 0] = ((boxes[:, 0] - pad_x // 2) / unpad_w) * orig_w
+    boxes[:, 1] = ((boxes[:, 1] - pad_y // 2) / unpad_h) * orig_h
+    boxes[:, 2] = ((boxes[:, 2] - pad_x // 2) / unpad_w) * orig_w
+    boxes[:, 3] = ((boxes[:, 3] - pad_y // 2) / unpad_h) * orig_h
+
+    return boxes
+
+
+def xywh2xyxy(xywh):
+    """
+    座標の表記を(center_x,center_y,width,height)から(x1,y1,x2,y2)に変換する
+    """
+    xyxy = xywh.new(xywh.shape)
+    xyxy[..., 0] = xywh[..., 0] - xywh[..., 2] / 2
+    xyxy[..., 1] = xywh[..., 1] - xywh[..., 3] / 2
+    xyxy[..., 2] = xywh[..., 0] + xywh[..., 2] / 2
+    xyxy[..., 3] = xywh[..., 1] + xywh[..., 3] / 2
+
+    return xyxy

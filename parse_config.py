@@ -1,30 +1,28 @@
-def parse_model_config(path):
+def parse_model_config(cfgpath):
     """
     モデルのconfigファイルを読み込む関数
     cfgファイルのパスを渡すと解析して全てのブロックをdictとして保存する
     pathの例は"cfg/yolov3.cfg"
     """
-    cfg_file = open(path, "r")
-    lines = cfg_file.read().split("\n")
-    lines = [x for x in lines if len(x) > 0]  # 空の行を無視する
-    lines = [x for x in lines if x[0] != "#"]  # コメントアウトを無視する
+    cfgfile = open(cfgpath, 'r')
+    lines = cfgfile.read().split('\n')
+    # コメントアウトされているものを除く
+    lines = [x for x in lines if x and not x.startswith('#')]
     lines = [x.rstrip().lstrip() for x in lines]
-
-    block = {}
-    blocks = []
-
+    module_defs = []
     for line in lines:
-        if line[0] == "[":
-            if len(block) != 0:
-                blocks.append(block)
-                block = {}
-            block["type"] = line[1:-1].rstrip()
+        if line.startswith('['):  # This marks the start of a new block
+            module_defs.append({})
+            module_defs[-1]['type'] = line[1:-1].rstrip()
+            if module_defs[-1]['type'] == 'convolutional':
+                module_defs[-1]['batch_normalize'] = 0
         else:
             key, value = line.split("=")
-            block[key.rstrip()] = value.lstrip()
-    blocks.append(block)
+            value = value.strip()
+            module_defs[-1][key.rstrip()] = value.strip()
 
-    return blocks
+    return module_defs
+
 
 def parse_data_config(path):
     """
