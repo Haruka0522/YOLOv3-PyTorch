@@ -97,88 +97,49 @@ def predict_transform(
     return prediction
 
 
-def write_results(prediction, confidence, num_classes, nms_conf=0.4):
+def non_max_suppres_thres_process(prediction, obj_thres=0.5, nms_thres=0.4):
     """
     predict結果を受け取って、objectness scoreのしきい値処理とNon-maximal suppressionを行う
     また、その結果を書き出す
-    confidenceはobjectness scoreのしきい値
-    nms_confはIoUのしきい値
+    obj_thresはobjectness scoreのしきい値
+    nms_thresはIoUのしきい値
     """
-    conf_mask = (prediction[:, :, 4] > confidence).float().unsqueeze(2)
-    prediction = prediction * conf_mask
+    #(center_x,center_y,width,height)から(x1,y1,x2,y2)に変換する
+    prediction[...,:4] = xywh2xyxy(prediction[...,:4])
+    
+    #Noneで埋められた初期outputを生成
+    output = [None for _ in range(len(prediction))]
 
-    # IoUの計算
-    box_corner = prediction.new(prediction.shape)
-    box_corner[:, :, 0] = prediction[:, :, 0] - prediction[:, :, 2] / 2
-    box_corner[:, :, 1] = prediction[:, :, 1] - prediction[:, :, 3] / 2
-    box_corner[:, :, 2] = prediction[:, :, 0] + prediction[:, :, 2] / 2
-    box_corner[:, :, 3] = prediction[:, :, 1] + prediction[:, :, 3] / 2
-    prediction[:, :, :4] = box_corner[:, :, :4]
+    for image_i, image_pred in enumerate(prediction):
+        # objectness scoreのしきい値以下のものを除外
+        image_pred = image_pred[image_pred[:, 4] >= obj_thres]
 
-    batch_size = prediction.size(0)
-
-    write = False  # 初期化していないフラグ
-
-    for idx in range(batch_size):
-        image_pred = prediction[idx]
-        max_conf, max_conf_score = torch.max(image_pred[:, 5:5+num_classes], 1)
-        max_conf = max_conf.float().unsqueeze(1)
-        max_conf_score = max_conf_score.float().unsqueeze(1)
-        seq = (image_pred[:, :5], max_conf, max_conf_score)
-        image_pred = torch.cat(seq, 1)
-
-        non_zero_idx = torch.nonzero(image_pred[:, 4])
-        try:
-            image_pred_ = image_pred[non_zero_idx.squeeze(), :].view(-1, 7)
-        except:
-            continue
-        if image_pred_.shape[0] == 0:
+        # Noneが残っている場合はcontinue
+        if not image_pred.size(0):
             continue
 
-        img_classes = unique(image_pred_[:, -1])  # 検出されたクラス
+        # objectness scoreでソート
+        score = image_pred[:, 4] * image_pred[:, 5:].max(1)[0]
+        image_pred = image_pred[(-score).argsort()]
+        class_confs, class_preds = image_pred[:, 5:].max(1, keepdim=True)
+        detections = torch.cat((image_pred[:, :5], class_confs.float(), class_preds.float()), 1)
 
-        # NMSをクラスごとに実行
-        for cls in img_classes:
-            cls_mask = image_pred_ * \
-                (image_pred_[:, -1] == cls).float().unsqueeze(1)
-            class_mask_idx = torch.nonzero(cls_mask[:, -2]).squeeze()
-            image_pred_class = image_pred_[class_mask_idx].view(-1, 7)
+        # non-maximum suppressionの処理
+        keep_boxes = []
+        while detections.size(0):
+            #IoUの計算としきい値処理
+            large_overlap = bbox_iou(detections[0, :4].unsqueeze(0), detections[:, :4]) > nms_thres
+            label_match = detections[0, -1] == detections[:, -1]
+            invalid = large_overlap & label_match
+            weights = detections[invalid, 4:5]
+            detections[0, :4] = (weights * detections[invalid, :4]).sum(0) / weights.sum()
+            keep_boxes += [detections[0]]
+            detections = detections[~invalid]
+        if keep_boxes:
+            output[image_i] = torch.stack(keep_boxes)
 
-            # objectnessでsort
-            conf_sort_index = torch.sort(
-                image_pred_class[:, 4], descending=True)[1]
-            image_pred_class = image_pred_class[conf_sort_index]
-            indx = image_pred_class.size(0)  # 検出されたnumber
+    return output
 
-            # ここからがNMSの処理
-            for i in range(indx):
-                try:
-                    ious = bbox_iou(image_pred_class[i].unsqueeze(
-                        0), image_pred_class[i+1:])
-                except ValueError:
-                    break
-                except IndexError:
-                    break
-                iou_mask = (ious < nms_conf).float().unsqueeze(1)
-                image_pred_class[i+1:] *= iou_mask
-
-                non_zero_idx = torch.nonzero(image_pred_class[:, 4]).squeeze()
-                image_pred_class = image_pred_class[non_zero_idx].view(-1, 7)
-
-            batch_idx = image_pred_class.new(
-                image_pred_class.size(0), 1).fill_(idx)
-            seq = batch_idx, image_pred_class
-
-            if not write:
-                output = torch.cat(seq, 1)
-                write = True
-            else:
-                out = torch.cat(seq, 1)
-                output = torch.cat((output, out))
-    try:
-        return output
-    except:
-        return 0
 
 
 def letterbox_image(img, inp_dim):
@@ -315,44 +276,3 @@ def xywh2xyxy(xywh):
     xyxy[..., 2] =xywh[..., 0] + xywh[..., 2] / 2
     xyxy[..., 3] =xywh[..., 1] + xywh[..., 3] / 2
     return xyxy
-
-
-def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.4):
-    """
-    Removes detections with lower object confidence score than 'conf_thres' and performs
-    Non-Maximum Suppression to further filter detections.
-    Returns detections with shape:
-        (x1, y1, x2, y2, object_conf, class_score, class_pred)
-    """
-
-    # From (center x, center y, width, height) to (x1, y1, x2, y2)
-    prediction[..., :4] = xywh2xyxy(prediction[..., :4])
-    output = [None for _ in range(len(prediction))]
-    for image_i, image_pred in enumerate(prediction):
-        # Filter out confidence scores below threshold
-        image_pred = image_pred[image_pred[:, 4] >= conf_thres]
-        # If none are remaining => process next image
-        if not image_pred.size(0):
-            continue
-        # Object confidence times class confidence
-        score = image_pred[:, 4] * image_pred[:, 5:].max(1)[0]
-        # Sort by it
-        image_pred = image_pred[(-score).argsort()]
-        class_confs, class_preds = image_pred[:, 5:].max(1, keepdim=True)
-        detections = torch.cat((image_pred[:, :5], class_confs.float(), class_preds.float()), 1)
-        # Perform non-maximum suppression
-        keep_boxes = []
-        while detections.size(0):
-            large_overlap = bbox_iou(detections[0, :4].unsqueeze(0), detections[:, :4]) > nms_thres
-            label_match = detections[0, -1] == detections[:, -1]
-            # Indices of boxes with lower confidence scores, large IOUs and matching labels
-            invalid = large_overlap & label_match
-            weights = detections[invalid, 4:5]
-            # Merge overlapping bboxes by order of confidence
-            detections[0, :4] = (weights * detections[invalid, :4]).sum(0) / weights.sum()
-            keep_boxes += [detections[0]]
-            detections = detections[~invalid]
-        if keep_boxes:
-            output[image_i] = torch.stack(keep_boxes)
-
-    return output
