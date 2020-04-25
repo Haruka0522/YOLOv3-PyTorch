@@ -104,10 +104,10 @@ def non_max_suppres_thres_process(prediction, obj_thres=0.5, nms_thres=0.4):
     obj_thresはobjectness scoreのしきい値
     nms_thresはIoUのしきい値
     """
-    #(center_x,center_y,width,height)から(x1,y1,x2,y2)に変換する
-    prediction[...,:4] = xywh2xyxy(prediction[...,:4])
-    
-    #Noneで埋められた初期outputを生成
+    # (center_x,center_y,width,height)から(x1,y1,x2,y2)に変換する
+    prediction[..., :4] = xywh2xyxy(prediction[..., :4])
+
+    # Noneで埋められた初期outputを生成
     output = [None for _ in range(len(prediction))]
 
     for image_i, image_pred in enumerate(prediction):
@@ -122,24 +122,26 @@ def non_max_suppres_thres_process(prediction, obj_thres=0.5, nms_thres=0.4):
         score = image_pred[:, 4] * image_pred[:, 5:].max(1)[0]
         image_pred = image_pred[(-score).argsort()]
         class_confs, class_preds = image_pred[:, 5:].max(1, keepdim=True)
-        detections = torch.cat((image_pred[:, :5], class_confs.float(), class_preds.float()), 1)
+        detections = torch.cat(
+            (image_pred[:, :5], class_confs.float(), class_preds.float()), 1)
 
         # non-maximum suppressionの処理
         keep_boxes = []
         while detections.size(0):
-            #IoUの計算としきい値処理
-            large_overlap = bbox_iou(detections[0, :4].unsqueeze(0), detections[:, :4]) > nms_thres
+            # IoUの計算としきい値処理
+            large_overlap = bbox_iou(detections[0, :4].unsqueeze(
+                0), detections[:, :4]) > nms_thres
             label_match = detections[0, -1] == detections[:, -1]
             invalid = large_overlap & label_match
             weights = detections[invalid, 4:5]
-            detections[0, :4] = (weights * detections[invalid, :4]).sum(0) / weights.sum()
+            detections[0, :4] = (
+                weights * detections[invalid, :4]).sum(0) / weights.sum()
             keep_boxes += [detections[0]]
             detections = detections[~invalid]
         if keep_boxes:
             output[image_i] = torch.stack(keep_boxes)
 
     return output
-
 
 
 def letterbox_image(img, inp_dim):
@@ -195,7 +197,7 @@ def to_cpu(tensor):
     return tensor.detach().cpu()
 
 
-def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
+def build_targets(pred_boxes, pred_cls, target, anchors, iou_thres):
 
     ByteTensor = torch.cuda.ByteTensor if pred_boxes.is_cuda else torch.ByteTensor
     FloatTensor = torch.cuda.FloatTensor if pred_boxes.is_cuda else torch.FloatTensor
@@ -205,7 +207,7 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     nC = pred_cls.size(-1)
     nG = pred_boxes.size(2)
 
-    # Output tensors
+    # 出力用Tensor
     obj_mask = ByteTensor(nB, nA, nG, nG).fill_(0)
     noobj_mask = ByteTensor(nB, nA, nG, nG).fill_(1)
     class_mask = FloatTensor(nB, nA, nG, nG).fill_(0)
@@ -216,63 +218,82 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     th = FloatTensor(nB, nA, nG, nG).fill_(0)
     tcls = FloatTensor(nB, nA, nG, nG, nC).fill_(0)
 
-    # Convert to position relative to box
+    # boxを基準とする座標情報に変換
     target_boxes = target[:, 2:6] * nG
     gxy = target_boxes[:, :2]
     gwh = target_boxes[:, 2:]
-    # Get anchors with best iou
+
+    # IoUの計算結果からanchorを取得
     ious = torch.stack([bbox_wh_iou(anchor, gwh) for anchor in anchors])
     best_ious, best_n = ious.max(0)
-    # Separate target values
+
     b, target_labels = target[:, :2].long().t()
     gx, gy = gxy.t()
     gw, gh = gwh.t()
     gi, gj = gxy.long().t()
-    # Set masks
+
+    # mask
     obj_mask[b, best_n, gj, gi] = 1
     noobj_mask[b, best_n, gj, gi] = 0
 
-    # Set noobj mask to zero where iou exceeds ignore threshold
+    # IoUのしきい値処理
     for i, anchor_ious in enumerate(ious.t()):
-        noobj_mask[b[i], anchor_ious > ignore_thres, gj[i], gi[i]] = 0
+        noobj_mask[b[i], anchor_ious > iou_thres, gj[i], gi[i]] = 0
 
-    # Coordinates
+    # 座標
     tx[b, best_n, gj, gi] = gx - gx.floor()
     ty[b, best_n, gj, gi] = gy - gy.floor()
-    # Width and height
+
+    # widthとheight
     tw[b, best_n, gj, gi] = torch.log(gw / anchors[best_n][:, 0] + 1e-16)
     th[b, best_n, gj, gi] = torch.log(gh / anchors[best_n][:, 1] + 1e-16)
+
     # One-hot encoding of label
     tcls[b, best_n, gj, gi, target_labels] = 1
-    # Compute label correctness and iou at best anchor
-    class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
-    iou_scores[b, best_n, gj, gi] = bbox_iou(pred_boxes[b, best_n, gj, gi], target_boxes, x1y1x2y2=False)
+
+    # 一番良いanchorを計算
+    class_mask[b, best_n, gj, gi] = (
+        pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
+    iou_scores[b, best_n, gj, gi] = bbox_iou(
+        pred_boxes[b, best_n, gj, gi], target_boxes, x1y1x2y2=False)
 
     tconf = obj_mask.float()
-    return iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf
+
+    return_info = \
+        [iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf]
+
+    return return_info
 
 
 def rescale_boxes(boxes, current_dim, original_shape):
-    """ Rescales bounding boxes to the original shape """
+    """ bouding boxを元画像の形状に合うように計算する """
     orig_h, orig_w = original_shape
-    # The amount of padding that was added
+
+    # 追加されたpaddingの量
     pad_x = max(orig_h - orig_w, 0) * (current_dim / max(original_shape))
     pad_y = max(orig_w - orig_h, 0) * (current_dim / max(original_shape))
-    # Image height and width after padding is removed
+
+    # 追加されたpaddingを削除
     unpad_h = current_dim - pad_y
     unpad_w = current_dim - pad_x
-    # Rescale bounding boxes to dimension of original image
+
+    # 元の画像のサイズに修正
     boxes[:, 0] = ((boxes[:, 0] - pad_x // 2) / unpad_w) * orig_w
     boxes[:, 1] = ((boxes[:, 1] - pad_y // 2) / unpad_h) * orig_h
     boxes[:, 2] = ((boxes[:, 2] - pad_x // 2) / unpad_w) * orig_w
     boxes[:, 3] = ((boxes[:, 3] - pad_y // 2) / unpad_h) * orig_h
+
     return boxes
 
 
 def xywh2xyxy(xywh):
+    """
+    座標の表記を(center_x,center_y,width,height)から(x1,y1,x2,y2)に変換する
+    """
     xyxy = xywh.new(xywh.shape)
-    xyxy[..., 0] =xywh[..., 0] - xywh[..., 2] / 2
-    xyxy[..., 1] =xywh[..., 1] - xywh[..., 3] / 2
-    xyxy[..., 2] =xywh[..., 0] + xywh[..., 2] / 2
-    xyxy[..., 3] =xywh[..., 1] + xywh[..., 3] / 2
+    xyxy[..., 0] = xywh[..., 0] - xywh[..., 2] / 2
+    xyxy[..., 1] = xywh[..., 1] - xywh[..., 3] / 2
+    xyxy[..., 2] = xywh[..., 0] + xywh[..., 2] / 2
+    xyxy[..., 3] = xywh[..., 1] + xywh[..., 3] / 2
+
     return xyxy
