@@ -1,9 +1,6 @@
 from __future__ import division
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
 import numpy as np
 import cv2
 
@@ -32,22 +29,12 @@ def bbox_iou(box1, box2):
     return iou
 
 
-def unique(tensor):
-    tensor_np = tensor.cpu().numpy()
-    unique_np = np.unique(tensor_np)
-    unique_tensor = torch.from_numpy(unique_np)
-    tensor_res = tensor.new(unique_tensor.shape)
-    tensor_res.copy_(unique_tensor)
-
-    return tensor_res
-
-
 def predict_transform(
         prediction, inp_dim, anchors, num_classes, CUDA=None):
     """
     検出マップを受け取って２次元テンソルに変換する
     """
-    if CUDA == None:
+    if CUDA is None:
         CUDA = torch.cuda.is_available()
     batch_size = prediction.size(0)
     stride = inp_dim // prediction.size(2)
