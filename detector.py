@@ -22,34 +22,33 @@ def arg_parse():
     parser = argparse.ArgumentParser(description='YOLO v3 Detection Module')
 
     parser.add_argument("--images", dest='images', help="Image / Directory containing images to perform detection upon",
-                        default="imgs", type=str)
+                        default="images", type=str)
     parser.add_argument("--det", dest='det', help="Image / Directory to store detections to",
-                        default="det", type=str)
+                        default="result", type=str)
     parser.add_argument("--bs", dest="bs", help="Batch size", default=1)
     parser.add_argument("--confidence", dest="confidence",
-                        help="Object Confidence to filter predictions", default=0.5)
+                        help="Object Confidence to filter predictions", default=0.5, type=float)
     parser.add_argument("--nms_thresh", dest="nms_thresh",
-                        help="NMS Threshhold", default=0.4)
+                        help="NMS Threshhold", default=0.4, type=float)
     parser.add_argument("--cfg", dest='cfgfile', help="Config file",
                         default="cfg/yolov3.cfg", type=str)
     parser.add_argument("--weights", dest='weightsfile', help="weightsfile",
                         default="yolov3.weights", type=str)
-    parser.add_argument("--reso", dest='reso', help="Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
+    parser.add_argument("--img_size", dest="img_size", help="each image dimension size",
                         default="416", type=int)
+    parser.add_argument("--class", dest="cls", help="path to class label",
+                        default="data/coco.names", type=str)
 
     return parser.parse_args()
 
 
-args = arg_parse()
-images = args.images
-batch_size = int(args.bs)
-confidence = float(args.confidence)
-nms_thesh = float(args.nms_thresh)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
-num_classes = 80
-
-classes = load_classes("data/coco.names")
+args = arg_parse()
+print("--- running options ---")
+print(args)
+print("")
 
 # ニューラルネットワークのセットアップ
 print("Loading network......")
@@ -57,20 +56,21 @@ model = Darknet(args.cfgfile).to(device)
 model.load_weights(args.weightsfile)
 print("Network successfully loaded")
 
+# モデルをevaluationモードにセット
 model.eval()
-
-Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
 # 保存先がないときは作成
 if not os.path.exists(args.det):
     os.makedirs(args.det)
 
+# 検出画像をロード
 dataloader = DataLoader(
     ImageFolder(args.images),
-    batch_size=int(args.bs),
+    batch_size=args.bs,
     shuffle=False,
     num_workers=4)
 
+# 推論結果を入れるリスト
 imgs = []
 img_detections = []
 
@@ -81,17 +81,18 @@ for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
     with torch.no_grad():
         detections = model(input_imgs)
         detections = non_max_suppres_thres_process(
-            detections, confidence, nms_thesh)
+            detections, args.confidence, args.nms_thresh)
 
     imgs.extend(img_paths)
     img_detections.extend(detections)
 
 # 結果を画像に描画
+classes = load_classes(args.cls)
 for img_i, (path, detections) in enumerate(zip(imgs, img_detections)):
     img_cv = cv2.imread(path)
     if detections is not None:
         detections = rescale_boxes(
-            detections, int(args.reso), img_cv.shape[:2])
+            detections, int(args.img_size), img_cv.shape[:2])
         unique_labels = detections[:, -1].cpu().unique()
         n_cls_preds = len(unique_labels)
         colors = pkl.load(open("pallete", "rb"))
