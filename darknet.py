@@ -139,7 +139,7 @@ class YOLOLayer(nn.Module):
         self.anchors = anchors
         self.num_anchors = len(anchors)
         self.num_classes = num_classes
-        self.ignore_thres = 0.5
+        self.iou_thres = 0.5
         self.mse_loss = nn.MSELoss()  # loss関数のインスタンス
         self.bce_loss = nn.BCELoss()  # loss関数のインスタンス
         self.obj_scale = 1
@@ -220,7 +220,7 @@ class YOLOLayer(nn.Module):
                 pred_cls=pred_cls,
                 target=targets,
                 anchors=self.scaled_anchors,
-                ignore_thres=self.ignore_thres
+                iou_thres=self.iou_thres
             )
 
             # 存在しないオブジェクトを無視するようにする
@@ -372,6 +372,33 @@ class Darknet(nn.Module):
 
                 conv_weights = conv_weights.view_as(conv_layer.weight.data)
                 conv_layer.weight.data.copy_(conv_weights)
+
+    def save_weights(self,path,cutoff=-1):
+        """
+        weightsファイルを保存する
+        学習時に使う関数
+        """
+        with open(path,"wb") as w_file:
+            self.header_info[3] = self.seen
+            self.header_info.tofile(w_file)
+
+            for i,(module_def,module) in enumerate(zip(self.module_defs[:cutoff],self.module_list[:cutoff])):
+                if module_def["type"] == "convolutional":
+                    conv_layer = module[0]
+
+                    #batch normalizeが有効ならば
+                    if  module_def["batch_normalize"]:
+                        bn_layer = module[1]
+                        bn_layer.bias.data.cpu().numpy().tofile(w_file)
+                        bn_layer.weight.data.cpu().numpy().tofile(w_file)
+                        bn_layer.running_mean.data.cpu().numpy().tofile(w_file)
+                        bn_layer.running_var.data.cpu().numpy().tofile(w_file)
+
+                    else:
+                        conv_layer.bias.data.cpu().numpy().tofile(w_file)
+
+                    conv_layer.weight.data.cpu().numpy().tofile(w_file)
+
 
 
 """このコードが正常にかけているかのテスト"""

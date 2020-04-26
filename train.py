@@ -1,27 +1,23 @@
 from __future__ import division
 
-from darknet import *
-from util import *
-from logger import *
-from parse_config import *
-from datasets import *
+from darknet import Darknet
+from util import load_classes, weights_init_normal
+from logger import Logger
+from parse_config import parse_data_config
+from datasets import ListDataset
 from terminaltables import AsciiTable
 
 import os
-import sys
 import time
 import datetime
 import argparse
 
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
-from torchvision import datasets
-from torchvision import transforms
 from torch.autograd import Variable
-import torch.optim as optim
 
-if __name__ == '__main__':
+
+def arg_parse():
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=100,
                         help="number of epochs")
@@ -47,8 +43,15 @@ if __name__ == '__main__':
                         help="if True computes mAP every tenth batch")
     parser.add_argument("--multiscale_training", default=True,
                         help="allow for malti-scale training")
-    opt = parser.parse_args()
-    print(opt)
+
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = arg_parse()
+    print("--- running options ---")
+    print(args)
+    print("")
 
     logger = Logger("logs")
 
@@ -59,22 +62,22 @@ if __name__ == '__main__':
     os.makedirs("checkpoints", exist_ok=True)
 
     # configファイルを受け取る
-    data_config = parse_data_config(opt.data_config)
+    data_config = parse_data_config(args.data_config)
     train_path = data_config["train"]
     valid_path = data_config["valid"]
     class_names = load_classes(data_config["names"])
 
     # 初期modelを構成する
-    model = Darknet(opt.model_def).to(device)
+    model = Darknet(args.model_def).to(device)
     model.apply(weights_init_normal)
 
     # dataloaderを作成
-    dataset = ListDataset(train_path, multiscale=opt.multiscale_training)
+    dataset = ListDataset(train_path, multiscale=args.multiscale_training)
     dataloader = DataLoader(
         dataset,
-        batch_size=opt.batch_size,
+        batch_size=args.batch_size,
         shuffle=True,
-        num_workers=opt.n_cpu,
+        num_workers=args.n_cpu,
         pin_memory=True,
         collate_fn=dataset.collate_fn,
     )
@@ -100,7 +103,7 @@ if __name__ == '__main__':
     ]
 
     # ここから実際にループを回して学習する
-    for epoch in range(opt.epochs):
+    for epoch in range(args.epochs):
         model.train()
         start_time = time.time()  # ログ用に始めた時間を記録
         for batch_i, (_, imgs, targets) in enumerate(dataloader):
@@ -112,14 +115,14 @@ if __name__ == '__main__':
             loss, outpus = model(imgs, targets=targets)
             loss.backward()
 
-            if baches_done % opt.gradient_accumulation:
+            if batches_done % args.gradient_accumulations:
                 # 各ステップの前に勾配を累積する
                 optimizer.step()
                 optimizer.zero_grad()
 
             # ここからログを残す処理
             log_str = "\n --- [Epoch{0}/{1}, Batch {2}/{3}] --- \n"\
-                .format(poch, opt.epochs, batch_i, len(dataloader))
+                .format(epoch, args.epochs, batch_i, len(dataloader))
 
             metric_table = [
                 ["Metrics", *[f"YOLO Layer {i}" for i in range(len(model.yolo_layers))]]]
@@ -155,11 +158,11 @@ if __name__ == '__main__':
 
             model.seen += imgs.size(0)
 
-        # opt.evaluation_interval回毎にモデルの評価を表示する
-        if epoch % opt.evaluation_interval == 0:
+        # args.evaluation_interval回毎にモデルの評価を表示する
+        if epoch % args.evaluation_interval == 0:
             print("\n --- Evaluating Model --- ")
             print("モデル評価は未実装")
 
-        if epoch % opt.checkpoint_interval == 0:
+        if epoch % args.checkpoint_interval == 0:
             torch.save(model.state_dict(),
                        f"checkpoints/yolov3_ckpt_%d.pth" % epoch)

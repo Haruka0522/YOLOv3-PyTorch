@@ -29,6 +29,15 @@ def bbox_iou(box1, box2):
     return iou
 
 
+def bbox_wh_iou(wh1, wh2):
+    wh2 = wh2.t()
+    w1, h1 = wh1[0], wh1[1]
+    w2, h2 = wh2[0], wh2[1]
+    inter_area = torch.min(w1, w2) * torch.min(h1, h2)
+    union_area = (w1 * h1 + 1e-16) + w2 * h2 - inter_area
+    return inter_area / union_area
+
+
 def predict_transform(
         prediction, inp_dim, anchors, num_classes, CUDA=None):
     """
@@ -241,8 +250,9 @@ def build_targets(pred_boxes, pred_cls, target, anchors, iou_thres):
     # 一番良いanchorを計算
     class_mask[b, best_n, gj, gi] = (
         pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
+    
     iou_scores[b, best_n, gj, gi] = bbox_iou(
-        pred_boxes[b, best_n, gj, gi], target_boxes, x1y1x2y2=False)
+        xywh2xyxy(pred_boxes[b, best_n, gj, gi]), xywh2xyxy(target_boxes))
 
     tconf = obj_mask.float()
 
