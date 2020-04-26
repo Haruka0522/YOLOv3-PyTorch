@@ -112,14 +112,14 @@ if __name__ == '__main__':
             loss, outpus = model(imgs, targets=targets)
             loss.backward()
 
-            if baches_done % opt.gradient_accumulation:
+            if batches_done % opt.gradient_accumulations:
                 # 各ステップの前に勾配を累積する
                 optimizer.step()
                 optimizer.zero_grad()
 
             # ここからログを残す処理
             log_str = "\n --- [Epoch{0}/{1}, Batch {2}/{3}] --- \n"\
-                .format(poch, opt.epochs, batch_i, len(dataloader))
+                .format(epoch, opt.epochs, batch_i, len(dataloader))
 
             metric_table = [
                 ["Metrics", *[f"YOLO Layer {i}" for i in range(len(model.yolo_layers))]]]
