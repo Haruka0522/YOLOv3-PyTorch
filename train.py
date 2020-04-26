@@ -1,25 +1,21 @@
 from __future__ import division
 
-from darknet import *
-from util import *
-from logger import *
-from parse_config import *
-from datasets import *
+from darknet import Darknet
+from util import load_classes, weights_init_normal
+from logger import Logger
+from parse_config import parse_data_config
+from datasets import ListDataset
 from terminaltables import AsciiTable
 
 import os
-import sys
 import time
 import datetime
 import argparse
 
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
-from torchvision import datasets
-from torchvision import transforms
 from torch.autograd import Variable
-import torch.optim as optim
+
 
 def arg_parse():
     parser = argparse.ArgumentParser()
@@ -53,7 +49,9 @@ def arg_parse():
 
 if __name__ == '__main__':
     args = arg_parse()
+    print("--- running options ---")
     print(args)
+    print("")
 
     logger = Logger("logs")
 
