@@ -139,7 +139,7 @@ class YOLOLayer(nn.Module):
         self.anchors = anchors
         self.num_anchors = len(anchors)
         self.num_classes = num_classes
-        self.ignore_thres = 0.5
+        self.iou_thres = 0.5
         self.mse_loss = nn.MSELoss()  # loss関数のインスタンス
         self.bce_loss = nn.BCELoss()  # loss関数のインスタンス
         self.obj_scale = 1
@@ -220,7 +220,7 @@ class YOLOLayer(nn.Module):
                 pred_cls=pred_cls,
                 target=targets,
                 anchors=self.scaled_anchors,
-                ignore_thres=self.ignore_thres
+                iou_thres=self.iou_thres
             )
 
             # 存在しないオブジェクトを無視するようにする
