@@ -294,3 +294,101 @@ def xywh2xyxy(xywh):
     xyxy[..., 3] = xywh[..., 1] + xywh[..., 3] / 2
 
     return xyxy
+
+
+def calc_predict_scores(outputs,targets,iou_thres):
+    """各サンプル毎に予測スコアとラベルを計算する"""
+    batch_metrics = []
+    for sample_i in range(len(outputs)):
+
+        #Noneだったら何もせずに次へ
+        if outputs[sample_i] is None:
+            continue
+
+        output = outputs[sample_i]
+        pred_boxes = output[:,:4]
+        pred_scores = output[:,4]
+        pred_labels = output[:,-1]
+
+        #true_positivesは全て0で初期化
+        true_positives = np.zeros(pred_boxes.shape[0])
+
+        annotations = targets[targets[:,0] == sample_i][:,1:]
+
+
+        #アノテーションされたデータがあるときには
+        if len(annotations) >= 1:
+            detected_boxes = []
+            target_labels = annotations[:,0]
+            target_boxes = annotations[:,1]
+
+            for pred_i,(pred_box,pred_label) in enumerate(zip(pred_boxes,pred_labels)):
+                if len(detected_boxes) == len(annotations):
+                    break
+                if pred_label not in target_labels:
+                    continue
+
+                #IoUを計算
+                iou,box_index = bbox_iou(pred_box.unsqueeze(0),target_boxes).max(0)
+                if iou >= iou_thres and box_index not in detected_boxes:
+                    true_positives[pred_i] = 1
+                    detected_boxes += [box_index]
+        batch_metrics.append([true_positives,pred_scores,pred_labels])
+
+    return batch_metrics
+
+
+def calc_evaluation_index(tp,pred_cls,target_cls,obj_conf):
+    """各クラスごとに評価指標を計算する"""
+
+    #objectness scoreでソートする
+    i = np.argsort(-obj_conf)
+    tp,obj_conf,pred_cls = tp[i],obj_conf[i],pred_cls[i]
+
+    #クラスのset
+    unique_classes = np.unique(target_cls)
+
+    #Precision-Recall曲線を作って、APを計算
+    ap,p,r = [],[],[]
+    for c in unique_classes:
+        i = True if pred_cls == c else False
+        num_ground_truth = (target_cls==c).sum()
+        num_predicted = i.sum()
+
+        #何もなかったら何もしない
+        if num_predicted == 0 and num_ground_truth == 0:
+            continue
+
+        #どちらかがなかったら0で補う
+        if num_predicted == 0 or num_ground_truth == 0:
+            ap.append(0)
+            r.append(0)
+            p.append(0)
+
+        else:
+            #FPとTP
+            fpc = (1-tp[i]).cumsum()
+            tpc = (pt[i]).cumsum()
+
+            #Recall
+            recall_curve = tpc / (num_ground_truth + 1e-16)
+            r.append(recall_curve[-1])
+
+            #Precition
+            precition_curve = tpc / (tpc + fpc)
+            p.append(precition_curve[-1])
+
+            #AP
+            mrec = np.concatenate(([0.0],recall_curve,[1.0]))
+            mpre = np.concatenate(([0.0],precition_curve,[0.0]))
+            for i in range(mpre.size-1,0,-1):
+                mpre[i-1] = np.maximum(mpre[i-1],mpre[i])
+            i = np.where(mrec[1:] != mrec[:-1])[0]
+            ap_ = np.sum((mrec[i+1]-mrec[i])*mpre[i+1])
+            ap.append(ap_)
+
+        #F1
+        p,r,ap = np.array(p),np.array(r),np.array(ap)
+        f1 = 2 * p * r / (p + r + 1e16)
+
+        return p,r,ap,f1,unique_classes.astype("int32")

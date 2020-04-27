@@ -6,6 +6,7 @@ from logger import Logger
 from parse_config import parse_data_config
 from datasets import ListDataset
 from terminaltables import AsciiTable
+from model_evaluate import evaluate
 
 import os
 import time
@@ -158,11 +159,34 @@ if __name__ == '__main__':
 
             model.seen += imgs.size(0)
 
-        # args.evaluation_interval回毎にモデルの評価を表示する
+        # args.evaluation_interval回毎にモデルを評価する
         if epoch % args.evaluation_interval == 0:
             print("\n --- Evaluating Model --- ")
-            print("モデル評価は未実装")
+            # valセットでモデルの評価を行う
+            precision, recall, ap, f1, ap_class = \
+                evaluate(model=model,
+                         img_list_path=valid_path,
+                         img_size=args.img_size,
+                         batch_size=args.batch_size,
+                         iou_thres=0.5,
+                         obj_thres=0.5,
+                         nms_thres=0.5)
+            evaluation_metrics = [
+                ("val_precision", precision.mean()),
+                ("val_recall", recall.mean()),
+                ("val_mAP", ap.mean()),
+                ("val_f1", f1.mean())]
 
+            logger.list_of_scalars_summary(evaluation_metrics,epoch)
+
+            # 評価情報を表示する
+            ap_table = [["Index","Class name","AP"]]
+            for i,c in enumerate(ap_class):
+                ap_table += [[c,class_name[c],"%.5f"%AP[i]]]
+            print(AsciiTable(ap_table).table)
+            print("--- mAP {}".format(ap.mean()))
+
+        #args.checkpoint_interval毎にcheckpointを残す
         if epoch % args.checkpoint_interval == 0:
             torch.save(model.state_dict(),
                        f"checkpoints/yolov3_ckpt_%d.pth" % epoch)
