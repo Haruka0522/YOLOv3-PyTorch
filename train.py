@@ -1,12 +1,12 @@
 from __future__ import division
 
 from darknet import Darknet
-from util import load_classes, weights_init_normal
-from logger import Logger
-from parse_config import parse_data_config
-from datasets import ListDataset
+from utilyties.util import load_classes, weights_init_normal
+from utilyties.logger import Logger
+from utilyties.parse_config import parse_data_config
+from utilyties.datasets import ListDataset
 from terminaltables import AsciiTable
-from model_evaluate import evaluate
+from utilyties.model_evaluate import evaluate
 
 import os
 import time

@@ -4,10 +4,10 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
-from datasets import ImageFolder
+from utilyties.datasets import ImageFolder
 import numpy as np
 import cv2
-from util import load_classes, non_max_suppres_thres_process, rescale_boxes
+from utilyties.util import load_classes, non_max_suppres_thres_process, rescale_boxes
 import argparse
 import os
 from darknet import Darknet
@@ -95,7 +95,7 @@ for img_i, (path, detections) in enumerate(zip(imgs, img_detections)):
             detections, int(args.img_size), img_cv.shape[:2])
         unique_labels = detections[:, -1].cpu().unique()
         n_cls_preds = len(unique_labels)
-        colors = pkl.load(open("pallete", "rb"))
+        colors = pkl.load(open("utilyties/pallete", "rb"))
         for x1, y1, x2, y2, conf, cls_conf, cls_pred in detections:
             color = random.choice(colors)
             cv2.rectangle(img_cv, (x1, y1), (x2, y2), color, thickness=2)
