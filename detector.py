@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
-from utilyties.datasets import ImageFolder
+from utilyties.datasets import GetImages
 import numpy as np
 import cv2
 from utilyties.util import load_classes, non_max_suppres_thres_process, rescale_boxes
@@ -65,7 +65,7 @@ if not os.path.exists(args.det):
 
 # 検出画像をロード
 dataloader = DataLoader(
-    ImageFolder(args.images),
+    GetImages(args.images),
     batch_size=args.bs,
     shuffle=False,
     num_workers=4)
