@@ -50,6 +50,6 @@ def evaluate(model, img_list_path, img_size, batch_size, iou_thres, obj_thres, n
     true_positives, pred_scores, pred_labels = \
         [np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
     precision, recall, ap, f1, ap_class = \
-        calc_evaluation_index(true_positives, pred_scores, pred_labels, labels)
+        calc_evaluation_index(true_positives, pred_labels,labels,pred_scores)
 
     return precision, recall, ap, f1, ap_class
