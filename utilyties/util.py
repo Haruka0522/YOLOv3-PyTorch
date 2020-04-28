@@ -320,7 +320,7 @@ def calc_predict_scores(outputs,targets,iou_thres):
         if len(annotations) >= 1:
             detected_boxes = []
             target_labels = annotations[:,0]
-            target_boxes = annotations[:,1]
+            target_boxes = annotations[:,1:]
 
             for pred_i,(pred_box,pred_label) in enumerate(zip(pred_boxes,pred_labels)):
                 if len(detected_boxes) == len(annotations):
@@ -351,7 +351,7 @@ def calc_evaluation_index(tp,pred_cls,target_cls,obj_conf):
     #Precision-Recall曲線を作って、APを計算
     ap,p,r = [],[],[]
     for c in unique_classes:
-        i = True if pred_cls == c else False
+        i = pred_cls == c
         num_ground_truth = (target_cls==c).sum()
         num_predicted = i.sum()
 
@@ -368,7 +368,7 @@ def calc_evaluation_index(tp,pred_cls,target_cls,obj_conf):
         else:
             #FPとTP
             fpc = (1-tp[i]).cumsum()
-            tpc = (pt[i]).cumsum()
+            tpc = (tp[i]).cumsum()
 
             #Recall
             recall_curve = tpc / (num_ground_truth + 1e-16)
