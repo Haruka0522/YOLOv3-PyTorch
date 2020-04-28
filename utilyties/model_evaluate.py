@@ -1,7 +1,7 @@
 from __future__ import division
 
-from datasets import ListDataset
-from util import xywh2xyxy, non_max_suppres_thres_process, calc_predict_scores, calc_evaluation_index
+from utilyties.datasets import ListDataset
+from utilyties.util import xywh2xyxy, non_max_suppres_thres_process, calc_predict_scores, calc_evaluation_index
 
 import torch
 from torch.autograd import Variable
