@@ -159,6 +159,7 @@ if __name__ == '__main__':
 
             model.seen += imgs.size(0)
 
+
         # args.evaluation_interval回毎にモデルを評価する
         if epoch % args.evaluation_interval == 0:
             print("\n --- Evaluating Model --- ")
@@ -182,10 +183,9 @@ if __name__ == '__main__':
             # 評価情報を表示する
             ap_table = [["Index","Class name","AP"]]
             for i,c in enumerate(ap_class):
-                ap_table += [[c,class_name[c],"%.5f"%AP[i]]]
+                ap_table += [[c,class_names[c],"%.5f"%ap[i]]]
             print(AsciiTable(ap_table).table)
             print("--- mAP {}".format(ap.mean()))
-
         #args.checkpoint_interval毎にcheckpointを残す
         if epoch % args.checkpoint_interval == 0:
             torch.save(model.state_dict(),
