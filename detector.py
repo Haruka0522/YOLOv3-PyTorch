@@ -46,7 +46,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
 args = arg_parse()
-print("--- running options ---")
+print("\n--- running options ---")
 print(args)
 print("")
 
@@ -64,11 +64,14 @@ if not os.path.exists(args.det):
     os.makedirs(args.det)
 
 # 検出画像をロード
+dataset = GetImages(args.images)
 dataloader = DataLoader(
-    GetImages(args.images),
+    dataset,
     batch_size=args.bs,
     shuffle=False,
     num_workers=4)
+print("\n--- detection images list ---")
+print(dataset.files)
 
 # 推論結果を入れるリスト
 imgs = []
