@@ -33,7 +33,7 @@ def arg_parse():
     parser.add_argument("--cfg", dest='cfgfile', help="Config file",
                         default="cfg/yolov3.cfg", type=str)
     parser.add_argument("--weights", dest='weightsfile', help="weightsfile",
-                        default="yolov3.weights", type=str)
+                        default="weights/yolov3.weights", type=str)
     parser.add_argument("--img_size", dest="img_size", help="each image dimension size",
                         default="416", type=int)
     parser.add_argument("--class", dest="cls", help="path to class label",
