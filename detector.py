@@ -76,7 +76,7 @@ if __name__ == '__main__':
         num_workers=4)
     print("\n--- detection images list ---")
     print(dataset.files)
-    print("\nAll data loaded in {} seconds\n".format(time.time()-load_imgs_time))
+    print("\nAll data loaded in {:6.4f} seconds\n".format(time.time()-load_imgs_time))
 
     #推論を開始した時間
     start_det_time = time.time()
@@ -101,7 +101,7 @@ if __name__ == '__main__':
         img_detections.extend(detections)
         batch_end_time = time.time()   #batch一つあたりの時間計測終わり
         det_time_list.append((batch_start_time,batch_end_time))
-        print("batch{} predicted in {} seconds".format(batch_i,batch_end_time-batch_start_time))
+        print("batch{} predicted in {:6.4f} seconds".format(batch_i,batch_end_time-batch_start_time))
 
     # 結果を画像に描画
     classes = load_classes(args.cls)
@@ -121,20 +121,4 @@ if __name__ == '__main__':
                             cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2)
                 cv2.imwrite(args.det+"/result_"+str(img_i)+".jpg", img_cv)
 
-    """
-    # 結果のprint
-    print("SUMMARY")
-    print("----------------------------------------------------------")
-    print("{:25s}: {}".format("Task", "Time Taken (in seconds)"))
-    print()
-    print("{:25s}: {:2.3f}".format("Reading addresses", load_batch - read_dir))
-    print("{:25s}: {:2.3f}".format("Loading batch", start_det_loop - load_batch))
-    print("{:25s}: {:2.3f}".format(
-        "Detection (" + str(len(imlist)) + " images)", output_recast - start_det_loop))
-    print("{:25s}: {:2.3f}".format("Output Processing", class_load - output_recast))
-    print("{:25s}: {:2.3f}".format("Drawing Boxes", end - draw))
-    print("{:25s}: {:2.3f}".format(
-        "Average time_per_img", (end - load_batch)/len(imlist)))
-    print("----------------------------------------------------------")
-    """
     torch.cuda.empty_cache()
