@@ -64,7 +64,7 @@ if __name__ == '__main__':
     if not os.path.exists(args.det):
         os.makedirs(args.det)
 
-    #画像を読み込み始めた時間
+    # 画像を読み込み始めた時間
     load_imgs_time = time.time()
 
     # 検出画像をロード
@@ -76,9 +76,10 @@ if __name__ == '__main__':
         num_workers=4)
     print("\n--- detection images list ---")
     print(dataset.files)
-    print("\nAll data loaded in {:6.4f} seconds\n".format(time.time()-load_imgs_time))
+    print("\nAll data loaded in {:6.4f} seconds\n".format(
+        time.time()-load_imgs_time))
 
-    #推論を開始した時間
+    # 推論を開始した時間
     start_det_time = time.time()
 
     # 推論結果を入れるリスト
@@ -88,7 +89,7 @@ if __name__ == '__main__':
 
     # 推論
     for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
-        batch_start_time = time.time()   #batch一つあたりの時間計測始まり
+        batch_start_time = time.time()  # batch一つあたりの時間計測始まり
 
         input_imgs = Variable(input_imgs.type(Tensor))
 
@@ -99,9 +100,10 @@ if __name__ == '__main__':
 
         imgs.extend(img_paths)
         img_detections.extend(detections)
-        batch_end_time = time.time()   #batch一つあたりの時間計測終わり
-        det_time_list.append((batch_start_time,batch_end_time))
-        print("batch{} predicted in {:6.4f} seconds".format(batch_i,batch_end_time-batch_start_time))
+        batch_end_time = time.time()  # batch一つあたりの時間計測終わり
+        det_time_list.append((batch_start_time, batch_end_time))
+        print("batch{} predicted in {:6.4f} seconds".format(
+            batch_i, batch_end_time-batch_start_time))
 
     # 結果を画像に描画
     classes = load_classes(args.cls)
