@@ -27,7 +27,7 @@ def arg_parse():
                         default="result", type=str)
     parser.add_argument("--bs", dest="bs", help="Batch size", default=1)
     parser.add_argument("--confidence", dest="confidence",
-                        help="Object Confidence to filter predictions", default=0.5, type=float)
+                        help="Object Confidence to filter predictions", default=0.7, type=float)
     parser.add_argument("--nms_thresh", dest="nms_thresh",
                         help="NMS Threshhold", default=0.4, type=float)
     parser.add_argument("--cfg", dest='cfgfile', help="Config file",
@@ -42,85 +42,99 @@ def arg_parse():
     return parser.parse_args()
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
+if __name__ == '__main__':
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 
-args = arg_parse()
-print("\n--- running options ---")
-print(args)
-print("")
+    args = arg_parse()
+    print("\n--- running options ---")
+    print(args)
+    print("")
 
-# ニューラルネットワークのセットアップ
-print("Loading network......")
-model = Darknet(args.cfgfile).to(device)
-model.load_weights(args.weightsfile)
-print("Network successfully loaded")
+    # ニューラルネットワークのセットアップ
+    print("Loading network......")
+    model = Darknet(args.cfgfile).to(device)
+    model.load_weights(args.weightsfile)
+    print("Network successfully loaded")
 
-# モデルをevaluationモードにセット
-model.eval()
+    # モデルをevaluationモードにセット
+    model.eval()
 
-# 保存先がないときは作成
-if not os.path.exists(args.det):
-    os.makedirs(args.det)
+    # 保存先がないときは作成
+    if not os.path.exists(args.det):
+        os.makedirs(args.det)
 
-# 検出画像をロード
-dataset = GetImages(args.images)
-dataloader = DataLoader(
-    dataset,
-    batch_size=args.bs,
-    shuffle=False,
-    num_workers=4)
-print("\n--- detection images list ---")
-print(dataset.files)
+    #画像を読み込み始めた時間
+    load_imgs_time = time.time()
 
-# 推論結果を入れるリスト
-imgs = []
-img_detections = []
+    # 検出画像をロード
+    dataset = GetImages(args.images)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.bs,
+        shuffle=False,
+        num_workers=4)
+    print("\n--- detection images list ---")
+    print(dataset.files)
+    print("\nAll data loaded in {} seconds\n".format(time.time()-load_imgs_time))
 
-# 推論
-for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
-    input_imgs = Variable(input_imgs.type(Tensor))
+    #推論を開始した時間
+    start_det_time = time.time()
 
-    with torch.no_grad():
-        detections = model(input_imgs)
-        detections = non_max_suppres_thres_process(
-            detections, args.confidence, args.nms_thresh)
+    # 推論結果を入れるリスト
+    imgs = []
+    img_detections = []
+    det_time_list = []
 
-    imgs.extend(img_paths)
-    img_detections.extend(detections)
+    # 推論
+    for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
+        batch_start_time = time.time()   #batch一つあたりの時間計測始まり
 
-# 結果を画像に描画
-classes = load_classes(args.cls)
-for img_i, (path, detections) in enumerate(zip(imgs, img_detections)):
-    img_cv = cv2.imread(path)
-    if detections is not None:
-        detections = rescale_boxes(
-            detections, int(args.img_size), img_cv.shape[:2])
-        unique_labels = detections[:, -1].cpu().unique()
-        n_cls_preds = len(unique_labels)
-        colors = pkl.load(open("utilyties/pallete", "rb"))
-        for x1, y1, x2, y2, conf, cls_conf, cls_pred in detections:
-            color = random.choice(colors)
-            cv2.rectangle(img_cv, (x1, y1), (x2, y2), color, thickness=2)
-            label = classes[int(cls_pred)]
-            cv2.putText(img_cv, label, (x1, y1),
-                        cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2)
-            cv2.imwrite(args.det+"/result_"+str(img_i)+".jpg", img_cv)
+        input_imgs = Variable(input_imgs.type(Tensor))
 
-"""
-# 結果のprint
-print("SUMMARY")
-print("----------------------------------------------------------")
-print("{:25s}: {}".format("Task", "Time Taken (in seconds)"))
-print()
-print("{:25s}: {:2.3f}".format("Reading addresses", load_batch - read_dir))
-print("{:25s}: {:2.3f}".format("Loading batch", start_det_loop - load_batch))
-print("{:25s}: {:2.3f}".format(
-    "Detection (" + str(len(imlist)) + " images)", output_recast - start_det_loop))
-print("{:25s}: {:2.3f}".format("Output Processing", class_load - output_recast))
-print("{:25s}: {:2.3f}".format("Drawing Boxes", end - draw))
-print("{:25s}: {:2.3f}".format(
-    "Average time_per_img", (end - load_batch)/len(imlist)))
-print("----------------------------------------------------------")
-"""
-torch.cuda.empty_cache()
+        with torch.no_grad():
+            detections = model(input_imgs)
+            detections = non_max_suppres_thres_process(
+                detections, args.confidence, args.nms_thresh)
+
+        imgs.extend(img_paths)
+        img_detections.extend(detections)
+        batch_end_time = time.time()   #batch一つあたりの時間計測終わり
+        det_time_list.append((batch_start_time,batch_end_time))
+        print("batch{} predicted in {} seconds".format(batch_i,batch_end_time-batch_start_time))
+
+    # 結果を画像に描画
+    classes = load_classes(args.cls)
+    for img_i, (path, detections) in enumerate(zip(imgs, img_detections)):
+        img_cv = cv2.imread(path)
+        if detections is not None:
+            detections = rescale_boxes(
+                detections, int(args.img_size), img_cv.shape[:2])
+            unique_labels = detections[:, -1].cpu().unique()
+            n_cls_preds = len(unique_labels)
+            colors = pkl.load(open("utilyties/pallete", "rb"))
+            for x1, y1, x2, y2, conf, cls_conf, cls_pred in detections:
+                color = random.choice(colors)
+                cv2.rectangle(img_cv, (x1, y1), (x2, y2), color, thickness=2)
+                label = classes[int(cls_pred)]
+                cv2.putText(img_cv, label, (x1, y1),
+                            cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2)
+                cv2.imwrite(args.det+"/result_"+str(img_i)+".jpg", img_cv)
+
+    """
+    # 結果のprint
+    print("SUMMARY")
+    print("----------------------------------------------------------")
+    print("{:25s}: {}".format("Task", "Time Taken (in seconds)"))
+    print()
+    print("{:25s}: {:2.3f}".format("Reading addresses", load_batch - read_dir))
+    print("{:25s}: {:2.3f}".format("Loading batch", start_det_loop - load_batch))
+    print("{:25s}: {:2.3f}".format(
+        "Detection (" + str(len(imlist)) + " images)", output_recast - start_det_loop))
+    print("{:25s}: {:2.3f}".format("Output Processing", class_load - output_recast))
+    print("{:25s}: {:2.3f}".format("Drawing Boxes", end - draw))
+    print("{:25s}: {:2.3f}".format(
+        "Average time_per_img", (end - load_batch)/len(imlist)))
+    print("----------------------------------------------------------")
+    """
+    torch.cuda.empty_cache()
