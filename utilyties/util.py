@@ -320,7 +320,7 @@ def calc_predict_scores(outputs,targets,iou_thres):
         if len(annotations) >= 1:
             detected_boxes = []
             target_labels = annotations[:,0]
-            target_boxes = annotations[:,1]
+            target_boxes = annotations[:,1:]
 
             for pred_i,(pred_box,pred_label) in enumerate(zip(pred_boxes,pred_labels)):
                 if len(detected_boxes) == len(annotations):
@@ -351,7 +351,7 @@ def calc_evaluation_index(tp,pred_cls,target_cls,obj_conf):
     #Precision-Recall曲線を作って、APを計算
     ap,p,r = [],[],[]
     for c in unique_classes:
-        i = True if pred_cls == c else False
+        i = pred_cls == c
         num_ground_truth = (target_cls==c).sum()
         num_predicted = i.sum()
 
@@ -360,7 +360,7 @@ def calc_evaluation_index(tp,pred_cls,target_cls,obj_conf):
             continue
 
         #どちらかがなかったら0で補う
-        if num_predicted == 0 or num_ground_truth == 0:
+        elif num_predicted == 0 or num_ground_truth == 0:
             ap.append(0)
             r.append(0)
             p.append(0)
@@ -368,7 +368,7 @@ def calc_evaluation_index(tp,pred_cls,target_cls,obj_conf):
         else:
             #FPとTP
             fpc = (1-tp[i]).cumsum()
-            tpc = (pt[i]).cumsum()
+            tpc = (tp[i]).cumsum()
 
             #Recall
             recall_curve = tpc / (num_ground_truth + 1e-16)
@@ -381,14 +381,14 @@ def calc_evaluation_index(tp,pred_cls,target_cls,obj_conf):
             #AP
             mrec = np.concatenate(([0.0],recall_curve,[1.0]))
             mpre = np.concatenate(([0.0],precition_curve,[0.0]))
-            for i in range(mpre.size-1,0,-1):
-                mpre[i-1] = np.maximum(mpre[i-1],mpre[i])
-            i = np.where(mrec[1:] != mrec[:-1])[0]
-            ap_ = np.sum((mrec[i+1]-mrec[i])*mpre[i+1])
+            for s in range(mpre.size-1,0,-1):
+                mpre[s-1] = np.maximum(mpre[s-1],mpre[s])
+            s = np.where(mrec[1:] != mrec[:-1])[0]
+            ap_ = np.sum((mrec[s+1]-mrec[s])*mpre[s+1])
             ap.append(ap_)
 
-        #F1
-        p,r,ap = np.array(p),np.array(r),np.array(ap)
-        f1 = 2 * p * r / (p + r + 1e16)
+    #F1
+    p,r,ap = np.array(p),np.array(r),np.array(ap)
+    f1 = 2 * p * r / (p + r + 1e16)
 
-        return p,r,ap,f1,unique_classes.astype("int32")
+    return p,r,ap,f1,unique_classes.astype("int32")

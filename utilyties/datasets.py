@@ -130,9 +130,12 @@ class ListDataset(Dataset):
         return len(self.img_files)
 
 
-class ImageFolder(Dataset):
-    def __init__(self, folder_path, img_size=416):
-        self.files = sorted(glob.glob("%s/*.*" % folder_path))
+class GetImages(Dataset):
+    def __init__(self, dir_path, img_size=416):
+        if dir_path[-4:] in [".png",".jpg"]:
+            self.files = [dir_path,]
+        else:
+            self.files = sorted(glob.glob("%s/*.*" % dir_path))
         self.img_size = img_size
 
     def __getitem__(self, idx):

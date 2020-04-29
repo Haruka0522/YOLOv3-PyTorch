@@ -7,9 +7,9 @@ from torch.autograd import Variable
 import numpy as np
 import cv2
 
-from util import to_cpu, build_targets
+from utilyties.util import to_cpu, build_targets
 
-from parse_config import parse_model_config
+from utilyties.parse_config import parse_model_config
 
 
 def get_test_input():

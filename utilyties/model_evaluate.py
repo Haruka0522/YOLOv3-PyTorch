@@ -1,7 +1,7 @@
 from __future__ import division
 
-from datasets import ListDataset
-from util import xywh2xyxy, non_max_suppres_thres_process, calc_predict_scores, calc_evaluation_index
+from utilyties.datasets import ListDataset
+from utilyties.util import xywh2xyxy, non_max_suppres_thres_process, calc_predict_scores, calc_evaluation_index
 
 import torch
 from torch.autograd import Variable
@@ -50,6 +50,6 @@ def evaluate(model, img_list_path, img_size, batch_size, iou_thres, obj_thres, n
     true_positives, pred_scores, pred_labels = \
         [np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
     precision, recall, ap, f1, ap_class = \
-        calc_evaluation_index(true_positives, pred_scores, pred_labels, labels)
+        calc_evaluation_index(true_positives, pred_labels,labels,pred_scores)
 
     return precision, recall, ap, f1, ap_class
