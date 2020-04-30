@@ -3,6 +3,7 @@ from __future__ import division
 import torch
 import numpy as np
 import cv2
+from PIL import Image
 
 
 def bbox_iou(box1, box2):
@@ -392,3 +393,17 @@ def calc_evaluation_index(tp,pred_cls,target_cls,obj_conf):
     f1 = 2 * p * r / (p + r + 1e16)
 
     return p,r,ap,f1,unique_classes.astype("int32")
+
+
+def cv2pil(image):
+    '''OpenCV型からPIL型に変換する'''
+    converted = image.copy()
+    if converted.ndim == 2:  # モノクロ
+        pass
+    elif converted.shape[2] == 3:  # カラー
+        converted = converted[:, :, ::-1]
+    elif converted.shape[2] == 4:  # 透過
+        converted = converted[:, :, [2, 1, 0, 3]]
+    converted = Image.fromarray(converted)
+
+    return converted
