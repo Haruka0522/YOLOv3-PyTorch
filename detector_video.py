@@ -17,8 +17,9 @@ def arg_parse():
 
     parser.add_argument("--confidence", dest="confidence",
                         help="Object Confidence to filter predictions", default=0.7, type=float)
-    parser.add_argument("--video",dest="videopath",default="IMG-0011.avi",type=str)
-    parser.add_argument("--preview",dest="preview",default=False,type=bool)
+    parser.add_argument("--video", dest="videopath",
+                        default="IMG-0011.avi", type=str)
+    parser.add_argument("--preview", dest="preview", default=False, type=bool)
     parser.add_argument("--nms_thresh", dest="nms_thresh",
                         help="NMS Threshhold", default=0.4, type=float)
     parser.add_argument("--cfg", dest='cfgfile', help="Config file",
@@ -53,7 +54,13 @@ if __name__ == '__main__':
     # モデルをevaluationモードにセット
     model.eval()
 
+    # captureとwriterのセットアップ
     video = cv2.VideoCapture(args.videopath)
+    fps = video.get(cv2.CAP_PROP_FPS)
+    w = int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h = int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter("output.avi", fourcc, fps, (w, h))
 
     classes = load_classes(args.cls)
 
@@ -94,7 +101,13 @@ if __name__ == '__main__':
                     cv2.putText(result, label, (x1, y1),
                                 cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2)
 
-        cv2.imshow("result", result)
-        # qを押すと終了
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+        out.write(result)
+        if args.preview:
+            cv2.imshow("result", result)
+            # qを押すと終了
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+
+    video.release()
+    out.release()
+    cv2.destroyAllWindows()
