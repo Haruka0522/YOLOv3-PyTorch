@@ -20,7 +20,17 @@ cd data
 sh coco_downloader.sh
 ```
 
-### 物体検出
+### 物体検出デモ（画像）
 ```
-python detector.py
+python detector_image.py
+```
+
+### 物体検出デモ（Webカメラ）
+```
+python detector_webcam.py
+```
+
+### 物体検出デモ（動画）
+```
+python detector_video.py --video 任意の動画へのパス
 ```
