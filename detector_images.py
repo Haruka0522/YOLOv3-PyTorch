@@ -104,8 +104,10 @@ if __name__ == '__main__':
             img_detections.extend(detections)
             batch_end_time = time.time()  # batch一つあたりの時間計測終わり
             det_time_list.append((batch_start_time, batch_end_time))
-            print("batch{} predicted in {:6.4f} seconds".format(
-                batch_i, batch_end_time-batch_start_time))
+            batch_info = "batch{} predicted in {:6.4f} seconds"\
+                    .format(batch_i,batch_end_time-batch_start_time)
+            pbar.postfix = batch_info
+            pbar.update()
 
     # 結果を画像に描画
     classes = load_classes(args.cls)
