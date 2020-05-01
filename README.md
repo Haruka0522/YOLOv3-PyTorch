@@ -34,3 +34,9 @@ python detector_webcam.py
 ```
 python detector_video.py --video 任意の動画へのパス
 ```
+
+### 学習デモ
+環境構築でダウンロードしたCOCOデータセットを学習するデモです。
+```
+python train.py
+```
