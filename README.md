@@ -40,3 +40,8 @@ python detector_video.py --video 任意の動画へのパス
 ```
 python train.py
 ```
+#### tensorboardで確認
+```
+tensorboard --logdir="logs"
+```
+ブラウザで http://localhost:6006/ にアクセス
