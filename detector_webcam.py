@@ -27,19 +27,22 @@ def arg_parse():
                         default="416", type=int)
     parser.add_argument("--class", dest="cls", help="path to class label",
                         default="data/coco.names", type=str)
+    parser.add_argument("--cuda", dest="cuda", help="use cuda flag True or False",
+                        default=True, type=bool)
 
     return parser.parse_args()
 
 
 if __name__ == '__main__':
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
-
     # 実行オプション
     args = arg_parse()
     print("\n--- running options ---")
     print(args)
     print("")
+
+    use_cuda = torch.cuda.is_available() and args.cuda
+    device = torch.device("cuda" if use_cuda else "cpu")
+    Tensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 
     # ニューラルネットワークのセットアップ
     print("Loading network......")

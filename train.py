@@ -44,6 +44,8 @@ def arg_parse():
                         help="if True computes mAP every tenth batch")
     parser.add_argument("--multiscale_training", default=True,
                         help="allow for malti-scale training")
+    parser.add_argument("--cuda", dest="cuda", help="use cuda flag True or False",
+                        default=True, type=bool)
 
     return parser.parse_args()
 
@@ -56,7 +58,8 @@ if __name__ == '__main__':
 
     logger = Logger("logs")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    use_cuda = torch.cuda.is_available() and args.cuda
+    device = torch.device("cuda" if use_cuda else "cpu")
 
     # 出力用ディレクトリの作成
     os.makedirs("output", exist_ok=True)
@@ -159,7 +162,6 @@ if __name__ == '__main__':
 
             model.seen += imgs.size(0)
 
-
         # args.evaluation_interval回毎にモデルを評価する
         if epoch % args.evaluation_interval == 0:
             print("\n --- Evaluating Model --- ")
@@ -178,15 +180,15 @@ if __name__ == '__main__':
                 ("val_mAP", ap.mean()),
                 ("val_f1", f1.mean())]
 
-            logger.list_of_scalars_summary(evaluation_metrics,epoch)
+            logger.list_of_scalars_summary(evaluation_metrics, epoch)
 
             # 評価情報を表示する
-            ap_table = [["Index","Class name","AP"]]
-            for i,c in enumerate(ap_class):
-                ap_table += [[c,class_names[c],"%.5f"%ap[i]]]
+            ap_table = [["Index", "Class name", "AP"]]
+            for i, c in enumerate(ap_class):
+                ap_table += [[c, class_names[c], "%.5f" % ap[i]]]
             print(AsciiTable(ap_table).table)
             print("--- mAP {}".format(ap.mean()))
-        #args.checkpoint_interval毎にcheckpointを残す
+        # args.checkpoint_interval毎にcheckpointを残す
         if epoch % args.checkpoint_interval == 0:
             torch.save(model.state_dict(),
                        f"checkpoints/yolov3_ckpt_%d.pth" % epoch)
