@@ -13,6 +13,7 @@ import os
 from darknet import Darknet
 import pickle as pkl
 import random
+from tqdm import tqdm
 
 
 def arg_parse():
@@ -88,22 +89,25 @@ if __name__ == '__main__':
     det_time_list = []
 
     # 推論
-    for batch_i, (img_paths, input_imgs) in enumerate(dataloader):
-        batch_start_time = time.time()  # batch一つあたりの時間計測始まり
+    with tqdm(dataloader) as pbar:
+        for batch_i, (img_paths, input_imgs) in enumerate(pbar):
+            batch_start_time = time.time()  # batch一つあたりの時間計測始まり
 
-        input_imgs = Variable(input_imgs.type(Tensor))
+            input_imgs = Variable(input_imgs.type(Tensor))
 
-        with torch.no_grad():
-            detections = model(input_imgs)
-            detections = non_max_suppres_thres_process(
-                detections, args.confidence, args.nms_thresh)
+            with torch.no_grad():
+                detections = model(input_imgs)
+                detections = non_max_suppres_thres_process(
+                    detections, args.confidence, args.nms_thresh)
 
-        imgs.extend(img_paths)
-        img_detections.extend(detections)
-        batch_end_time = time.time()  # batch一つあたりの時間計測終わり
-        det_time_list.append((batch_start_time, batch_end_time))
-        print("batch{} predicted in {:6.4f} seconds".format(
-            batch_i, batch_end_time-batch_start_time))
+            imgs.extend(img_paths)
+            img_detections.extend(detections)
+            batch_end_time = time.time()  # batch一つあたりの時間計測終わり
+            det_time_list.append((batch_start_time, batch_end_time))
+            batch_info = "batch{} predicted in {:6.4f} seconds"\
+                    .format(batch_i,batch_end_time-batch_start_time)
+            pbar.postfix = batch_info
+            pbar.update()
 
     # 結果を画像に描画
     classes = load_classes(args.cls)
