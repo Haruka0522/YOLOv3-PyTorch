@@ -125,8 +125,7 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
 
             # ここからログを残す処理
-            log_str = "\n --- [Epoch{0}/{1}, Batch {2}/{3}] --- \n"\
-                .format(epoch, args.epochs, batch_i, len(dataloader))
+            log_str = f"\n --- [Epoch{eposh}/{args.epochs}, Batch {batch_i}/{len(dataloader)}] --- \n"
 
             metric_table = [
                 ["Metrics", *[f"YOLO Layer {i}" for i in range(len(model.yolo_layers))]]]
@@ -187,7 +186,7 @@ if __name__ == '__main__':
             for i, c in enumerate(ap_class):
                 ap_table += [[c, class_names[c], "%.5f" % ap[i]]]
             print(AsciiTable(ap_table).table)
-            print("--- mAP {}".format(ap.mean()))
+            print(f"--- mAP {ap.mean()}")
         # args.checkpoint_interval毎にcheckpointを残す
         if epoch % args.checkpoint_interval == 0:
             torch.save(model.state_dict(),
