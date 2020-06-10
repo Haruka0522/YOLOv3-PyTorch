@@ -58,7 +58,7 @@ def predict_transform(
     prediction = prediction.view(
         batch_size, grid_size ** 2 * num_anchors, bbox_attrs)
 
-    anchors = [(a[0]/stride, a[1]/stride) for a in anchors]
+    anchors = [(a[0] / stride, a[1] / stride) for a in anchors]
 
     # sigmoid関数を通してobjectness scoreを算出する
     prediction[:, :, 0] = torch.sigmoid(prediction[:, :, 0])
@@ -86,7 +86,7 @@ def predict_transform(
 
     # class scoreにsigmoid activationを適用
     prediction[:, :, 5:5 +
-               num_classes] = torch.sigmoid((prediction[:, :, 5:5+num_classes]))
+               num_classes] = torch.sigmoid((prediction[:, :, 5:5 + num_classes]))
 
     # 検出マップのサイズを入力画像のサイズに変更するために、ストライドをかける
     prediction[:, :, :4] *= stride
@@ -146,13 +146,13 @@ def letterbox_image(img, inp_dim):
     img_h = img.shape[0]
     img_w = img.shape[1]
     w, h = inp_dim
-    new_h = int(img_h * min(w/img_w, h/img_h))
-    new_w = int(img_w * min(w/img_w, h/img_h))
+    new_h = int(img_h * min(w / img_w, h / img_h))
+    new_w = int(img_w * min(w / img_w, h / img_h))
     resized_image = cv2.resize(
         img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
     canvas = np.full((inp_dim[1], inp_dim[0], 3), 128)
-    canvas[(h-new_h)//2:(h-new_h)//2 + new_h, (w-new_w) //
-           2: (w-new_w)//2 + new_w, :] = resized_image
+    canvas[(h - new_h) // 2:(h - new_h) // 2 + new_h, (w - new_w) //
+           2: (w - new_w) // 2 + new_w, :] = resized_image
 
     return canvas
 
@@ -251,7 +251,7 @@ def build_targets(pred_boxes, pred_cls, target, anchors, iou_thres):
     # 一番良いanchorを計算
     class_mask[b, best_n, gj, gi] = (
         pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
-    
+
     iou_scores[b, best_n, gj, gi] = bbox_iou(
         xywh2xyxy(pred_boxes[b, best_n, gj, gi]), xywh2xyxy(target_boxes))
 
@@ -297,102 +297,101 @@ def xywh2xyxy(xywh):
     return xyxy
 
 
-def calc_predict_scores(outputs,targets,iou_thres):
+def calc_predict_scores(outputs, targets, iou_thres):
     """各サンプル毎に予測スコアとラベルを計算する"""
     batch_metrics = []
     for sample_i in range(len(outputs)):
 
-        #Noneだったら何もせずに次へ
+        # Noneだったら何もせずに次へ
         if outputs[sample_i] is None:
             continue
 
         output = outputs[sample_i]
-        pred_boxes = output[:,:4]
-        pred_scores = output[:,4]
-        pred_labels = output[:,-1]
+        pred_boxes = output[:, :4]
+        pred_scores = output[:, 4]
+        pred_labels = output[:, -1]
 
-        #true_positivesは全て0で初期化
+        # true_positivesは全て0で初期化
         true_positives = np.zeros(pred_boxes.shape[0])
 
-        annotations = targets[targets[:,0] == sample_i][:,1:]
+        annotations = targets[targets[:, 0] == sample_i][:, 1:]
 
-
-        #アノテーションされたデータがあるときには
+        # アノテーションされたデータがあるときには
         if len(annotations) >= 1:
             detected_boxes = []
-            target_labels = annotations[:,0]
-            target_boxes = annotations[:,1:]
+            target_labels = annotations[:, 0]
+            target_boxes = annotations[:, 1:]
 
-            for pred_i,(pred_box,pred_label) in enumerate(zip(pred_boxes,pred_labels)):
+            for pred_i, (pred_box, pred_label) in enumerate(zip(pred_boxes, pred_labels)):
                 if len(detected_boxes) == len(annotations):
                     break
                 if pred_label not in target_labels:
                     continue
 
-                #IoUを計算
-                iou,box_index = bbox_iou(pred_box.unsqueeze(0),target_boxes).max(0)
+                # IoUを計算
+                iou, box_index = bbox_iou(pred_box.unsqueeze(0), target_boxes).max(0)
                 if iou >= iou_thres and box_index not in detected_boxes:
                     true_positives[pred_i] = 1
                     detected_boxes += [box_index]
-        batch_metrics.append([true_positives,pred_scores,pred_labels])
+        batch_metrics.append([true_positives, pred_scores, pred_labels])
 
     return batch_metrics
 
 
-def calc_evaluation_index(tp,pred_cls,target_cls,obj_conf):
+def calc_evaluation_index(tp, pred_cls, target_cls, obj_conf):
     """各クラスごとに評価指標を計算する"""
 
-    #objectness scoreでソートする
+    # objectness scoreでソートする
     i = np.argsort(-obj_conf)
-    tp,obj_conf,pred_cls = tp[i],obj_conf[i],pred_cls[i]
+    tp, obj_conf, pred_cls = tp[i], obj_conf[i], pred_cls[i]
 
-    #クラスのset
+    # クラスのset
     unique_classes = np.unique(target_cls)
 
-    #Precision-Recall曲線を作って、APを計算
-    ap,p,r = [],[],[]
+    # Precision-Recall曲線を作って、APを計算
+    ap, p, r = [], [], []
     for c in unique_classes:
         i = pred_cls == c
-        num_ground_truth = (target_cls==c).sum()
+        num_ground_truth = (target_cls == c).sum()
         num_predicted = i.sum()
 
-        #何もなかったら何もしない
+        # 何もなかったら何もしない
         if num_predicted == 0 and num_ground_truth == 0:
             continue
 
-        #どちらかがなかったら0で補う
+        # どちらかがなかったら0で補う
         elif num_predicted == 0 or num_ground_truth == 0:
             ap.append(0)
             r.append(0)
             p.append(0)
 
         else:
-            #FPとTP
-            fpc = (1-tp[i]).cumsum()
+            # FPとTP
+            fpc = (1 - tp[i]).cumsum()
             tpc = (tp[i]).cumsum()
 
-            #Recall
+            # Recall
             recall_curve = tpc / (num_ground_truth + 1e-16)
             r.append(recall_curve[-1])
 
-            #Precition
+            # Precition
             precition_curve = tpc / (tpc + fpc)
             p.append(precition_curve[-1])
 
-            #AP
-            mrec = np.concatenate(([0.0],recall_curve,[1.0]))
-            mpre = np.concatenate(([0.0],precition_curve,[0.0]))
-            for s in range(mpre.size-1,0,-1):
-                mpre[s-1] = np.maximum(mpre[s-1],mpre[s])
+            # AP
+            mrec = np.concatenate(([0.0], recall_curve, [1.0]))
+            mpre = np.concatenate(([0.0], precition_curve, [0.0]))
+            for s in range(mpre.size - 1, 0, -1):
+                mpre[s - 1] = np.maximum(mpre[s - 1], mpre[s])
             s = np.where(mrec[1:] != mrec[:-1])[0]
-            ap_ = np.sum((mrec[s+1]-mrec[s])*mpre[s+1])
+            ap_ = np.sum((mrec[s + 1] - mrec[s]) * mpre[s + 1])
             ap.append(ap_)
 
-    #F1
-    p,r,ap = np.array(p),np.array(r),np.array(ap)
+    # F1
+    p, r, ap = np.array(p), np.array(r), np.array(ap)
     f1 = 2 * p * r / (p + r + 1e16)
 
-    return p,r,ap,f1,unique_classes.astype("int32")
+    return p, r, ap, f1, unique_classes.astype("int32")
 
 
 def cv2pil(image):
