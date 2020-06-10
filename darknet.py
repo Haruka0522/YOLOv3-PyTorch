@@ -63,36 +63,36 @@ def create_modules(blocks):
                 padding=pad,
                 bias=bias
             )
-            module.add_module("conv_{}".format(idx), conv)  # indexの名前で層を追加している
+            module.add_module(f"conv_{idx}", conv)  # indexの名前で層を追加している
 
             # batch normalization層を追加
             if batch_normalize:
                 bn = nn.BatchNorm2d(filters, momentum=0.9, eps=1e-5)
-                module.add_module("batch_norm_{}".format(idx), bn)
+                module.add_module(f"fatch_norm_{idx}", bn)
 
             # activationをチェック
             if activation == "leaky":
                 activn = nn.LeakyReLU(0.1)
-                module.add_module("leaky_{}".format(idx), activn)
+                module.add_module(f"leaky_{idx}", activn)
 
         # upsampling層の場合
         elif module_type == "upsample":
             stride = int(module_def["stride"])
             upsample = Upsample(scale_factor=stride, mode="nearest")
-            module.add_module("upsample_{}".format(idx), upsample)
+            module.add_module(f"upsample_{idx}", upsample)
 
         # route層の場合
         elif module_type == "route":
             layers = [int(x) for x in module_def["layers"].split(",")]
             filters = sum([output_filters[1:][i] for i in layers])
             route = EmptyLayer()
-            module.add_module("route_{}".format(idx), route)
+            module.add_module(f"route_{idx}", route)
 
         # short cut層の場合
         elif module_type == "shortcut":
             filters = output_filters[1:][int(module_def["from"])]
             shortcut = EmptyLayer()
-            module.add_module("shortcut_{}".format(idx), shortcut)
+            module.add_module(f"shortcut_{idx}", shortcut)
 
         # yolo層の場合
         elif module_type == "yolo":
@@ -107,7 +107,7 @@ def create_modules(blocks):
             num_classes = int(module_def["classes"])
             img_size = int(net_info["height"])
             yolo_layer = YOLOLayer(anchors, num_classes, img_size)
-            module.add_module("yolo_{}".format(idx), yolo_layer)
+            module.add_module(f"yolo_{idx}", yolo_layer)
 
         module_list.append(module)
         output_filters.append(filters)
