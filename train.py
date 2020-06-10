@@ -153,7 +153,7 @@ if __name__ == '__main__':
             # epochの残り時間を推定する
             epoch_batches_left = len(dataloader) - (batch_i + 1)
             time_left = datetime.timedelta(
-                seconds=epoch_batches_left*(time.time()-start_time)/(batch_i+1))
+                seconds=epoch_batches_left * (time.time() - start_time) / (batch_i + 1))
             log_str += f"\n --- ETA {time_left}"
 
             # ログ情報をprint
