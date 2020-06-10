@@ -101,7 +101,7 @@ def create_modules(blocks):
 
             anchors = module_def["anchors"].split(",")
             anchors = [int(x) for x in anchors]
-            anchors = [(anchors[i], anchors[i+1])
+            anchors = [(anchors[i], anchors[i + 1])
                        for i in range(0, len(anchors), 2)]  # 2つづつのタプルに区切る
             anchors = [anchors[i] for i in mask]
             num_classes = int(module_def["classes"])
@@ -176,7 +176,7 @@ class YOLOLayer(nn.Module):
 
         prediction = (
             x.view(num_samples, self.num_anchors,
-                   self.num_classes+5, grid_size, grid_size)
+                   self.num_classes + 5, grid_size, grid_size)
             .permute(0, 1, 3, 4, 2)
             .contiguous()
         )
@@ -339,19 +339,19 @@ class Darknet(nn.Module):
                     num_bn_biases = bn_layer.bias.numel()
 
                     bn_biases = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases]).view_as(bn_layer.bias)
+                        weights[ptr:ptr + num_bn_biases]).view_as(bn_layer.bias)
                     ptr += num_bn_biases
 
                     bn_weights = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases]).view_as(bn_layer.weight)
+                        weights[ptr:ptr + num_bn_biases]).view_as(bn_layer.weight)
                     ptr += num_bn_biases
 
                     bn_running_mean = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases]).view_as(bn_layer.running_mean)
+                        weights[ptr:ptr + num_bn_biases]).view_as(bn_layer.running_mean)
                     ptr += num_bn_biases
 
                     bn_running_var = torch.from_numpy(
-                        weights[ptr:ptr+num_bn_biases]).view_as(bn_layer.running_var)
+                        weights[ptr:ptr + num_bn_biases]).view_as(bn_layer.running_var)
                     ptr += num_bn_biases
 
                     bn_layer.bias.data.copy_(bn_biases)
@@ -361,33 +361,33 @@ class Darknet(nn.Module):
 
                 else:
                     num_biases = conv_layer.bias.numel()
-                    conv_biases = torch.from_numpy(weights[ptr:ptr+num_biases])
+                    conv_biases = torch.from_numpy(weights[ptr:ptr + num_biases])
                     ptr += num_biases
                     conv_biases = conv_biases.view_as(conv_layer.bias.data)
                     conv_layer.bias.data.copy_(conv_biases)
 
                 num_weights = conv_layer.weight.numel()
-                conv_weights = torch.from_numpy(weights[ptr:ptr+num_weights])
+                conv_weights = torch.from_numpy(weights[ptr:ptr + num_weights])
                 ptr += num_weights
 
                 conv_weights = conv_weights.view_as(conv_layer.weight.data)
                 conv_layer.weight.data.copy_(conv_weights)
 
-    def save_weights(self,path,cutoff=-1):
+    def save_weights(self, path, cutoff=-1):
         """
         weightsファイルを保存する
         学習時に使う関数
         """
-        with open(path,"wb") as w_file:
+        with open(path, "wb") as w_file:
             self.header_info[3] = self.seen
             self.header_info.tofile(w_file)
 
-            for i,(module_def,module) in enumerate(zip(self.module_defs[:cutoff],self.module_list[:cutoff])):
+            for i, (module_def, module) in enumerate(zip(self.module_defs[:cutoff], self.module_list[:cutoff])):
                 if module_def["type"] == "convolutional":
                     conv_layer = module[0]
 
-                    #batch normalizeが有効ならば
-                    if  module_def["batch_normalize"]:
+                    # batch normalizeが有効ならば
+                    if module_def["batch_normalize"]:
                         bn_layer = module[1]
                         bn_layer.bias.data.cpu().numpy().tofile(w_file)
                         bn_layer.weight.data.cpu().numpy().tofile(w_file)
@@ -398,7 +398,6 @@ class Darknet(nn.Module):
                         conv_layer.bias.data.cpu().numpy().tofile(w_file)
 
                     conv_layer.weight.data.cpu().numpy().tofile(w_file)
-
 
 
 """このコードが正常にかけているかのテスト"""
