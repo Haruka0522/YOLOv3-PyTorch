@@ -80,8 +80,7 @@ if __name__ == '__main__':
         num_workers=4)
     print("\n--- detection images list ---")
     print(dataset.files)
-    print("\nAll data loaded in {:6.4f} seconds\n".format(
-        time.time()-load_imgs_time))
+    print(f"\nAll data loaded in {time.time()-load_imgs_time:6.4f} seconds\n")
 
     # 推論を開始した時間
     start_det_time = time.time()
@@ -107,8 +106,7 @@ if __name__ == '__main__':
             img_detections.extend(detections)
             batch_end_time = time.time()  # batch一つあたりの時間計測終わり
             det_time_list.append((batch_start_time, batch_end_time))
-            batch_info = "batch{} predicted in {:6.4f} seconds"\
-                .format(batch_i, batch_end_time-batch_start_time)
+            batch_info = f"batch{batch_i} predicted in {batch_end_time-batch_start_time:6.4f} seconds"
             pbar.postfix = batch_info
             pbar.update()
 
@@ -128,6 +126,6 @@ if __name__ == '__main__':
                 label = classes[int(cls_pred)]
                 cv2.putText(img_cv, label, (x1, y1),
                             cv2.FONT_HERSHEY_PLAIN, 1.5, color, 2)
-                cv2.imwrite(args.det+"/result_"+str(img_i)+".jpg", img_cv)
+                cv2.imwrite(f"{args.det}/result_{img_i}.jpg", img_cv)
 
     torch.cuda.empty_cache()
