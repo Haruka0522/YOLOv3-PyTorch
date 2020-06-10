@@ -12,8 +12,8 @@ import torchvision.transforms as transforms
 
 def pad_to_square(img, pad_value):
     c, h, w = img.shape
-    dim_diff = np.abs(h-w)
-    pad1, pad2 = dim_diff//2, dim_diff-dim_diff//2
+    dim_diff = np.abs(h - w)
+    pad1, pad2 = dim_diff // 2, dim_diff - dim_diff // 2
     pad = (0, 0, pad1, pad2) if h <= w else (pad1, pad2, 0, 0)
     img = F.pad(img, pad, "constant", value=pad_value)
 
@@ -87,8 +87,8 @@ class ListDataset(Dataset):
             x2 += pad[1]
             y2 += pad[3]
 
-            boxes[:, 1] = ((x1+x2) / 2) / padded_w
-            boxes[:, 2] = ((y1+y2) / 2) / padded_h
+            boxes[:, 1] = ((x1 + x2) / 2) / padded_w
+            boxes[:, 2] = ((y1 + y2) / 2) / padded_h
             boxes[:, 3] *= w_factor / padded_w
             boxes[:, 4] *= h_factor / padded_h
 
@@ -106,7 +106,7 @@ class ListDataset(Dataset):
 
         # multiscaleがTrueならランダムに選ぶようのリストを作っておく
         if self.multiscale:
-            random_scale = list(range(self.min_size, self.max_size+1, 32))
+            random_scale = list(range(self.min_size, self.max_size + 1, 32))
 
         # targetsから空の要素を取り除く
         targets = [boxes for boxes in targets if boxes is not None]
@@ -132,8 +132,8 @@ class ListDataset(Dataset):
 
 class GetImages(Dataset):
     def __init__(self, dir_path, img_size=416):
-        if dir_path[-4:] in [".png",".jpg"]:
-            self.files = [dir_path,]
+        if dir_path[-4:] in [".png", ".jpg"]:
+            self.files = [dir_path, ]
         else:
             self.files = sorted(glob.glob("%s/*.*" % dir_path))
         self.img_size = img_size
